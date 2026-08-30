@@ -247,7 +247,7 @@
     // ---- Shared: discountAutomaticAppCreate-based panel (used for both
     // B2B trade pricing and B2B trade shipping -- same discount mutation
     // family, just a different function/title). ----
-    async function runDiscountPanel(prefix, functionTitle, discountTitle) {
+    async function runDiscountPanel(prefix, functionTitle, discountTitle, combinesWith) {
       const { setStatus, showDetail, actionsEl } = ui(prefix);
       try {
         setStatus('info', 'Looking up the function…');
@@ -276,8 +276,12 @@
             }
           }
         `);
+        // Matched by TITLE, not functionId -- title is what Shopify actually
+        // enforces uniqueness on for automatic discounts (functionId isn't a
+        // reliable match key across app redeploys), so this is what finds
+        // an already-created discount correctly.
         const existing = data.discountNodes.nodes.find(
-          (n) => n.discount.__typename === 'DiscountAutomaticApp' && n.discount.appDiscountType.functionId === fn.id
+          (n) => n.discount.__typename === 'DiscountAutomaticApp' && n.discount.title === discountTitle
         );
 
         if (existing && existing.discount.status === 'ACTIVE') {
@@ -327,7 +331,7 @@
                   title: discountTitle,
                   functionId: fn.id,
                   startsAt: new Date().toISOString(),
-                  combinesWith: { orderDiscounts: true, productDiscounts: true, shippingDiscounts: true },
+                  combinesWith,
                 },
               });
               if (result.discountAutomaticAppCreate.userErrors.length) throw new Error(JSON.stringify(result.discountAutomaticAppCreate.userErrors));
@@ -347,9 +351,15 @@
     }
 
     runPaymentPanel();
-    runDiscountPanel('b2b-pricing', 'B2B trade pricing', 'B2B trade pricing');
+    // A discount can't combine with another discount of its OWN class --
+    // Shopify rejects the create with a "not supported with these
+    // combines_with settings" error if you try. B2B trade pricing is a
+    // Product-class discount, so it leaves productDiscounts out; B2B trade
+    // shipping is a Shipping-class discount, so it leaves shippingDiscounts
+    // out. Both still combine with the OTHER two classes.
+    runDiscountPanel('b2b-pricing', 'B2B trade pricing', 'B2B trade pricing', { orderDiscounts: true, productDiscounts: false, shippingDiscounts: true });
     runDeliveryVisibilityPanel();
-    runDiscountPanel('b2b-ship-price', 'B2B trade shipping', 'B2B trade shipping');
+    runDiscountPanel('b2b-ship-price', 'B2B trade shipping', 'B2B trade shipping', { orderDiscounts: true, productDiscounts: true, shippingDiscounts: false });
   </script>
 </body>
 </html>
