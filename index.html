@@ -40,9 +40,25 @@
   <section>
     <h2>B2B trade pricing</h2>
     <p>Applies each product's <code>custom.wholesale_price</code> metafield (or a flat fallback %) as an automatic discount for customers tagged "b2b" — replaces creating a matching discount by hand per product. Set to combine with your other automatic discounts (e.g. Buy 4 get 1 free) so dealers get both at once.</p>
-    <div id="status-b2b" class="status info">Loading…</div>
-    <div id="actions-b2b"></div>
-    <pre id="detail-b2b" style="display:none"></pre>
+    <div id="status-b2b-pricing" class="status info">Loading…</div>
+    <div id="actions-b2b-pricing"></div>
+    <pre id="detail-b2b-pricing" style="display:none"></pre>
+  </section>
+
+  <section>
+    <h2>B2B shipping: hide other rates</h2>
+    <p>For customers tagged "b2b", keeps only the cheapest delivery option visible at checkout and hides every other one — so they see one shipping line, not a full carrier-rate list.</p>
+    <div id="status-b2b-ship-vis" class="status info">Loading…</div>
+    <div id="actions-b2b-ship-vis"></div>
+    <pre id="detail-b2b-ship-vis" style="display:none"></pre>
+  </section>
+
+  <section>
+    <h2>B2B trade shipping (free above threshold / flat rate below)</h2>
+    <p>Discounts whichever delivery option survives the panel above down to free (at/above the threshold) or a flat rate (below it) for customers tagged "b2b". <strong>Both numbers are set in the function's code</strong>, not here — see <code>tapedup-payment-rules/extensions/b2b-shipping-pricing/src/run.ts</code> to change them, then redeploy.</p>
+    <div id="status-b2b-ship-price" class="status info">Loading…</div>
+    <div id="actions-b2b-ship-price"></div>
+    <pre id="detail-b2b-ship-price" style="display:none"></pre>
   </section>
 
   <script>
@@ -78,7 +94,7 @@
       return data.shopifyFunctions.nodes.find((n) => n.title === title);
     }
 
-    // ---- Panel 1: payment customization ----
+    // ---- Payment customization panel (payment method visibility) ----
     async function runPaymentPanel() {
       const { setStatus, showDetail, actionsEl } = ui('payment');
       try {
@@ -153,12 +169,89 @@
       }
     }
 
-    // ---- Panel 2: B2B trade pricing discount ----
-    async function runB2bPanel() {
-      const { setStatus, showDetail, actionsEl } = ui('b2b');
+    // ---- Delivery customization panel (shipping option visibility) ----
+    async function runDeliveryVisibilityPanel() {
+      const { setStatus, showDetail, actionsEl } = ui('b2b-ship-vis');
       try {
         setStatus('info', 'Looking up the function…');
-        const fn = await findFunctionByTitle('B2B trade pricing');
+        const fn = await findFunctionByTitle('B2B shipping: hide other rates');
+        if (!fn) {
+          setStatus('err', 'Function not found. Has it been deployed? Run `shopify app deploy` from tapedup-payment-rules/.');
+          return;
+        }
+
+        setStatus('info', 'Checking for an existing delivery customization…');
+        const data = await adminFetch(`query { deliveryCustomizations(first: 25) { nodes { id title enabled functionId } } }`);
+        const existing = data.deliveryCustomizations.nodes.find((n) => n.functionId === fn.id);
+
+        if (existing && existing.enabled) {
+          setStatus('ok', `Already active as "${existing.title}". Nothing to do.`);
+          showDetail(existing);
+          return;
+        }
+
+        const btn = document.createElement('button');
+        if (existing) {
+          setStatus('info', `Found "${existing.title}", currently disabled.`);
+          btn.textContent = 'Activate it';
+          btn.onclick = async () => {
+            btn.disabled = true;
+            try {
+              const result = await adminFetch(`
+                mutation Update($id: ID!, $input: DeliveryCustomizationInput!) {
+                  deliveryCustomizationUpdate(id: $id, deliveryCustomization: $input) {
+                    deliveryCustomization { id title enabled }
+                    userErrors { field message }
+                  }
+                }
+              `, { id: existing.id, input: { enabled: true } });
+              if (result.deliveryCustomizationUpdate.userErrors.length) throw new Error(JSON.stringify(result.deliveryCustomizationUpdate.userErrors));
+              setStatus('ok', 'Activated.');
+              showDetail(result.deliveryCustomizationUpdate.deliveryCustomization);
+              actionsEl.innerHTML = '';
+            } catch (err) {
+              setStatus('err', 'Failed: ' + err.message);
+              btn.disabled = false;
+            }
+          };
+        } else {
+          setStatus('info', `Found function "${fn.title}". Not set up yet.`);
+          btn.textContent = 'Create and activate';
+          btn.onclick = async () => {
+            btn.disabled = true;
+            try {
+              const result = await adminFetch(`
+                mutation Create($input: DeliveryCustomizationInput!) {
+                  deliveryCustomizationCreate(deliveryCustomization: $input) {
+                    deliveryCustomization { id title enabled }
+                    userErrors { field message }
+                  }
+                }
+              `, { input: { functionId: fn.id, title: 'B2B shipping: hide other rates', enabled: true } });
+              if (result.deliveryCustomizationCreate.userErrors.length) throw new Error(JSON.stringify(result.deliveryCustomizationCreate.userErrors));
+              setStatus('ok', 'Created and activated.');
+              showDetail(result.deliveryCustomizationCreate.deliveryCustomization);
+              actionsEl.innerHTML = '';
+            } catch (err) {
+              setStatus('err', 'Failed: ' + err.message);
+              btn.disabled = false;
+            }
+          };
+        }
+        actionsEl.appendChild(btn);
+      } catch (err) {
+        setStatus('err', 'Something went wrong: ' + err.message);
+      }
+    }
+
+    // ---- Shared: discountAutomaticAppCreate-based panel (used for both
+    // B2B trade pricing and B2B trade shipping -- same discount mutation
+    // family, just a different function/title). ----
+    async function runDiscountPanel(prefix, functionTitle, discountTitle) {
+      const { setStatus, showDetail, actionsEl } = ui(prefix);
+      try {
+        setStatus('info', 'Looking up the function…');
+        const fn = await findFunctionByTitle(functionTitle);
         if (!fn) {
           setStatus('err', 'Function not found. Has it been deployed? Run `shopify app deploy` from tapedup-payment-rules/.');
           return;
@@ -231,7 +324,7 @@
                 }
               `, {
                 input: {
-                  title: 'B2B trade pricing',
+                  title: discountTitle,
                   functionId: fn.id,
                   startsAt: new Date().toISOString(),
                   combinesWith: { orderDiscounts: true, productDiscounts: true, shippingDiscounts: true },
@@ -254,7 +347,9 @@
     }
 
     runPaymentPanel();
-    runB2bPanel();
+    runDiscountPanel('b2b-pricing', 'B2B trade pricing', 'B2B trade pricing');
+    runDeliveryVisibilityPanel();
+    runDiscountPanel('b2b-ship-price', 'B2B trade shipping', 'B2B trade shipping');
   </script>
 </body>
 </html>
