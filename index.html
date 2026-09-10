@@ -79,9 +79,35 @@
       const statusEl = document.getElementById('status-' + prefix);
       const actionsEl = document.getElementById('actions-' + prefix);
       const detailEl = document.getElementById('detail-' + prefix);
+      let toggleEl = null;
+      function ensureToggle() {
+        if (toggleEl) return toggleEl;
+        toggleEl = document.createElement('a');
+        toggleEl.href = '#';
+        toggleEl.textContent = 'Show details';
+        toggleEl.style.cssText = 'display:inline-block;font-size:12px;color:#666;margin:8px 0 0;cursor:pointer;';
+        toggleEl.onclick = (e) => {
+          e.preventDefault();
+          const showing = detailEl.style.display !== 'none';
+          detailEl.style.display = showing ? 'none' : 'block';
+          toggleEl.textContent = showing ? 'Show details' : 'Hide details';
+        };
+        detailEl.parentNode.insertBefore(toggleEl, detailEl);
+        return toggleEl;
+      }
       return {
-        setStatus(kind, text) { statusEl.className = 'status ' + kind; statusEl.textContent = text; },
-        showDetail(obj) { detailEl.style.display = 'block'; detailEl.textContent = JSON.stringify(obj, null, 2); },
+        // Status line is the ONE thing you should need to read: a pass/fail
+        // symbol plus a short reason. Detail (raw IDs, diagnostics) stays
+        // hidden behind a toggle unless you go looking for it.
+        setStatus(kind, text) {
+          statusEl.className = 'status ' + kind;
+          statusEl.textContent = (kind === 'ok' ? '✓ ' : kind === 'err' ? '✗ ' : '') + text;
+        },
+        showDetail(obj) {
+          detailEl.style.display = 'none';
+          detailEl.textContent = JSON.stringify(obj, null, 2);
+          ensureToggle().textContent = 'Show details';
+        },
         actionsEl,
       };
     }
@@ -105,6 +131,60 @@
         }
       `);
       return data.shopifyFunctions.nodes.find((n) => n.title === title);
+    }
+
+    const SHIP_CONFIG_NAMESPACE = '$app:b2b-shipping-pricing';
+    const SHIP_CONFIG_KEY = 'function-configuration';
+
+    // Stores can have far more than 100 discounts once old promo/discount
+    // codes pile up over time -- a single-page fetch can miss an
+    // already-created automatic app discount entirely, which is exactly
+    // what caused "Title must be unique" on create (it existed, we just
+    // hadn't paged far enough to see it). This walks every page until it
+    // finds the title or runs out of pages, so the lookup is correct
+    // regardless of how many other discounts the store has.
+    async function findAppDiscountByTitle(title, opts = {}) {
+      const metafieldField = opts.withMetafield
+        ? `metafield(namespace: "${SHIP_CONFIG_NAMESPACE}", key: "${SHIP_CONFIG_KEY}") { value }`
+        : '';
+      let cursor = null;
+      let pagesScanned = 0;
+      let appDiscountsScanned = 0;
+      const seenTitles = [];
+      while (pagesScanned < 20) {
+        pagesScanned++;
+        const data = await adminFetch(`
+          query($cursor: String) {
+            discountNodes(first: 250, after: $cursor) {
+              pageInfo { hasNextPage endCursor }
+              nodes {
+                id
+                ${metafieldField}
+                discount {
+                  __typename
+                  ... on DiscountAutomaticApp {
+                    title
+                    status
+                    combinesWith { orderDiscounts productDiscounts shippingDiscounts }
+                  }
+                }
+              }
+            }
+          }
+        `, { cursor });
+        const { nodes, pageInfo } = data.discountNodes;
+        for (const n of nodes) {
+          if (n.discount.__typename !== 'DiscountAutomaticApp') continue;
+          appDiscountsScanned++;
+          seenTitles.push(n.discount.title);
+          if (n.discount.title === title) {
+            return { found: n, pagesScanned, appDiscountsScanned, seenTitles };
+          }
+        }
+        if (!pageInfo.hasNextPage) break;
+        cursor = pageInfo.endCursor;
+      }
+      return { found: null, pagesScanned, appDiscountsScanned, seenTitles };
     }
 
     // ---- Payment customization panel (payment method visibility) ----
@@ -271,47 +351,28 @@
         }
 
         setStatus('info', 'Checking for an existing discount…');
-        const data = await adminFetch(`
-          query {
-            discountNodes(first: 100) {
-              nodes {
-                id
-                discount {
-                  __typename
-                  ... on DiscountAutomaticApp {
-                    title
-                    status
-                    combinesWith { orderDiscounts productDiscounts shippingDiscounts }
-                    appDiscountType { functionId }
-                  }
-                }
-              }
-            }
-          }
-        `);
         // Matched by TITLE, not functionId -- title is what Shopify actually
         // enforces uniqueness on for automatic discounts (functionId isn't a
         // reliable match key across app redeploys), so this is what finds
-        // an already-created discount correctly.
-        const appDiscounts = data.discountNodes.nodes.filter((n) => n.discount.__typename === 'DiscountAutomaticApp');
-        const existing = appDiscounts.find((n) => n.discount.title === discountTitle);
+        // an already-created discount correctly. Paged across the whole
+        // store so an existing discount past the first page is never missed.
+        const { found: existing, pagesScanned, appDiscountsScanned, seenTitles } = await findAppDiscountByTitle(discountTitle);
 
         if (existing && existing.discount.status === 'ACTIVE') {
-          setStatus('ok', `Already active as "${existing.discount.title}". Nothing to do.`);
+          setStatus('ok', `Active as "${existing.discount.title}".`);
           showDetail(existing.discount);
           return;
         }
 
-        // Diagnostic: if we expected to find one and didn't, show exactly
-        // what app-owned discounts DID come back, titles and all, instead
-        // of guessing why the match failed.
-        if (!existing) {
-          showDetail({ lookingFor: discountTitle, totalDiscountNodesFetched: data.discountNodes.nodes.length, appDiscountsFound: appDiscounts.map((n) => ({ id: n.id, title: n.discount.title, status: n.discount.status })) });
-        }
+        // Diagnostic, hidden behind the "Show details" toggle: if we
+        // expected to find one and didn't, this is exactly what app-owned
+        // discounts DID come back, titles and all, instead of guessing why
+        // the match failed.
+        showDetail({ lookingFor: discountTitle, pagesScanned, appDiscountsScanned, seenTitles });
 
         const btn = document.createElement('button');
         if (existing) {
-          setStatus('info', `Found "${existing.discount.title}", status ${existing.discount.status}.`);
+          setStatus('info', `Found, not active yet (status ${existing.discount.status}).`);
           btn.textContent = 'Activate it';
           btn.onclick = async () => {
             btn.disabled = true;
@@ -373,39 +434,20 @@
     // metafield ($app:b2b-shipping-pricing / function-configuration), which
     // is exactly what the function itself reads at checkout -- so saving
     // here takes effect immediately, no redeploy. ----
-    const SHIP_CONFIG_NAMESPACE = '$app:b2b-shipping-pricing';
-    const SHIP_CONFIG_KEY = 'function-configuration';
     const SHIP_DEFAULTS = { freeShippingThreshold: 100, flatRateBelowThreshold: 6, priorityRate: 7.99 };
 
     async function runShippingSettingsPanel() {
       const statusEl = document.getElementById('status-b2b-ship-settings');
       const formEl = document.getElementById('form-b2b-ship-settings');
-      const setStatus = (kind, text) => { statusEl.className = 'status ' + kind; statusEl.textContent = text; };
+      const setStatus = (kind, text) => { statusEl.className = 'status ' + kind; statusEl.textContent = (kind === 'ok' ? '✓ ' : kind === 'err' ? '✗ ' : '') + text; };
 
       try {
         setStatus('info', 'Looking up the discount…');
-        const data = await adminFetch(`
-          query {
-            discountNodes(first: 100) {
-              nodes {
-                id
-                metafield(namespace: "${SHIP_CONFIG_NAMESPACE}", key: "${SHIP_CONFIG_KEY}") { value }
-                discount {
-                  __typename
-                  ... on DiscountAutomaticApp {
-                    title
-                  }
-                }
-              }
-            }
-          }
-        `);
-        const appDiscounts = data.discountNodes.nodes.filter((n) => n.discount.__typename === 'DiscountAutomaticApp');
-        const existing = appDiscounts.find((n) => n.discount.title === 'B2B trade shipping');
+        const { found: existing, seenTitles } = await findAppDiscountByTitle('B2B trade shipping', { withMetafield: true });
 
         if (!existing) {
-          const found = appDiscounts.map((n) => n.discount.title).join(', ') || '(none)';
-          setStatus('err', `Discount not found yet (fetched ${data.discountNodes.nodes.length} discounts, app-owned ones found: ${found}) — activate "B2B trade shipping" above first, then reload this page.`);
+          const found = seenTitles.join(', ') || '(none)';
+          setStatus('err', `Discount not found yet (app-owned discounts on this store: ${found}) — activate "B2B trade shipping" above first, then reload this page.`);
           return;
         }
 
@@ -430,7 +472,7 @@
               <div class="input-row"><span class="prefix">£</span><input id="ship-priority-rate" type="number" min="0" step="0.01" value="${current.priorityRate}"></div>
             </div>
           </div>
-          <p style="font-size:12px;color:#888;margin:4px 0 0">Priority only shows up if you've created a shipping rate in Settings → Shipping and delivery whose name contains "priority" — price it there at or above this amount (e.g. £50) so there's something to discount down to it.</p>
+          <p style="font-size:12px;color:#888;margin:4px 0 0">Priority pricing only applies to a shipping rate whose name contains both "B2B" and "priority" (e.g. "B2B Priority (24hr)") — price it in Settings → Shipping and delivery at or above this amount (e.g. £50) so there's something to discount down to it.</p>
         `;
         const btn = document.createElement('button');
         btn.textContent = 'Save';
