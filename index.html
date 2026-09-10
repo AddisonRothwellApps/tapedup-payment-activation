@@ -53,7 +53,7 @@
 
   <section>
     <h2>B2B shipping: hide other rates</h2>
-    <p>For customers tagged "b2b", keeps only the cheapest delivery option visible at checkout and hides every other one — so they see one shipping line, not a full carrier-rate list.</p>
+    <p>For customers tagged "b2b", keeps only the cheapest delivery option — plus a "Priority" one if you've created a rate with that word in its name — visible at checkout, and hides everything else, so they see their trade rate and an optional paid priority upgrade, not a full carrier-rate list.</p>
     <div id="status-b2b-ship-vis" class="status info">Loading…</div>
     <div id="actions-b2b-ship-vis"></div>
     <pre id="detail-b2b-ship-vis" style="display:none"></pre>
@@ -369,7 +369,7 @@
     // here takes effect immediately, no redeploy. ----
     const SHIP_CONFIG_NAMESPACE = '$app:b2b-shipping-pricing';
     const SHIP_CONFIG_KEY = 'function-configuration';
-    const SHIP_DEFAULTS = { freeShippingThreshold: 100, flatRateBelowThreshold: 6 };
+    const SHIP_DEFAULTS = { freeShippingThreshold: 100, flatRateBelowThreshold: 6, priorityRate: 7.99 };
 
     async function runShippingSettingsPanel() {
       const statusEl = document.getElementById('status-b2b-ship-settings');
@@ -419,7 +419,12 @@
               <label for="ship-flat-rate">Flat rate below threshold</label>
               <div class="input-row"><span class="prefix">£</span><input id="ship-flat-rate" type="number" min="0" step="0.01" value="${current.flatRateBelowThreshold}"></div>
             </div>
+            <div class="field-block">
+              <label for="ship-priority-rate">Priority (24hr) rate</label>
+              <div class="input-row"><span class="prefix">£</span><input id="ship-priority-rate" type="number" min="0" step="0.01" value="${current.priorityRate}"></div>
+            </div>
           </div>
+          <p style="font-size:12px;color:#888;margin:4px 0 0">Priority only shows up if you've created a shipping rate in Settings → Shipping and delivery whose name contains "priority" — price it there at or above this amount (e.g. £50) so there's something to discount down to it.</p>
         `;
         const btn = document.createElement('button');
         btn.textContent = 'Save';
@@ -430,14 +435,15 @@
           btn.disabled = true;
           const threshold = Number(document.getElementById('ship-threshold').value);
           const flatRate = Number(document.getElementById('ship-flat-rate').value);
-          if (!Number.isFinite(threshold) || threshold < 0 || !Number.isFinite(flatRate) || flatRate < 0) {
-            setStatus('err', 'Enter two valid, non-negative amounts.');
+          const priorityRate = Number(document.getElementById('ship-priority-rate').value);
+          if ([threshold, flatRate, priorityRate].some((n) => !Number.isFinite(n) || n < 0)) {
+            setStatus('err', 'Enter three valid, non-negative amounts.');
             btn.disabled = false;
             return;
           }
           try {
             setStatus('info', 'Saving…');
-            const value = JSON.stringify({ freeShippingThreshold: threshold, flatRateBelowThreshold: flatRate });
+            const value = JSON.stringify({ freeShippingThreshold: threshold, flatRateBelowThreshold: flatRate, priorityRate });
             const result = await adminFetch(`
               mutation Save($metafields: [MetafieldsSetInput!]!) {
                 metafieldsSet(metafields: $metafields) {
@@ -455,7 +461,7 @@
               }],
             });
             if (result.metafieldsSet.userErrors.length) throw new Error(JSON.stringify(result.metafieldsSet.userErrors));
-            setStatus('ok', `Saved — £${threshold} threshold, £${flatRate.toFixed(2)} flat rate. Takes effect on the next checkout.`);
+            setStatus('ok', `Saved — £${threshold} threshold, £${flatRate.toFixed(2)} flat rate, £${priorityRate.toFixed(2)} priority. Takes effect on the next checkout.`);
           } catch (err) {
             setStatus('err', 'Failed: ' + err.message);
           } finally {
