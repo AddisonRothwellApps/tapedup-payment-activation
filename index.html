@@ -383,11 +383,11 @@
             discountNodes(first: 25) {
               nodes {
                 id
+                metafield(namespace: "${SHIP_CONFIG_NAMESPACE}", key: "${SHIP_CONFIG_KEY}") { value }
                 discount {
                   __typename
                   ... on DiscountAutomaticApp {
                     title
-                    metafield(namespace: "${SHIP_CONFIG_NAMESPACE}", key: "${SHIP_CONFIG_KEY}") { value }
                   }
                 }
               }
@@ -405,7 +405,7 @@
 
         let current = SHIP_DEFAULTS;
         try {
-          const raw = existing.discount.metafield?.value;
+          const raw = existing.metafield?.value;
           if (raw) current = { ...SHIP_DEFAULTS, ...JSON.parse(raw) };
         } catch (err) { /* malformed value -- fall back to defaults */ }
 
