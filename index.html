@@ -273,7 +273,7 @@
         setStatus('info', 'Checking for an existing discount…');
         const data = await adminFetch(`
           query {
-            discountNodes(first: 25) {
+            discountNodes(first: 100) {
               nodes {
                 id
                 discount {
@@ -293,14 +293,20 @@
         // enforces uniqueness on for automatic discounts (functionId isn't a
         // reliable match key across app redeploys), so this is what finds
         // an already-created discount correctly.
-        const existing = data.discountNodes.nodes.find(
-          (n) => n.discount.__typename === 'DiscountAutomaticApp' && n.discount.title === discountTitle
-        );
+        const appDiscounts = data.discountNodes.nodes.filter((n) => n.discount.__typename === 'DiscountAutomaticApp');
+        const existing = appDiscounts.find((n) => n.discount.title === discountTitle);
 
         if (existing && existing.discount.status === 'ACTIVE') {
           setStatus('ok', `Already active as "${existing.discount.title}". Nothing to do.`);
           showDetail(existing.discount);
           return;
+        }
+
+        // Diagnostic: if we expected to find one and didn't, show exactly
+        // what app-owned discounts DID come back, titles and all, instead
+        // of guessing why the match failed.
+        if (!existing) {
+          showDetail({ lookingFor: discountTitle, totalDiscountNodesFetched: data.discountNodes.nodes.length, appDiscountsFound: appDiscounts.map((n) => ({ id: n.id, title: n.discount.title, status: n.discount.status })) });
         }
 
         const btn = document.createElement('button');
@@ -380,7 +386,7 @@
         setStatus('info', 'Looking up the discount…');
         const data = await adminFetch(`
           query {
-            discountNodes(first: 25) {
+            discountNodes(first: 100) {
               nodes {
                 id
                 metafield(namespace: "${SHIP_CONFIG_NAMESPACE}", key: "${SHIP_CONFIG_KEY}") { value }
@@ -394,12 +400,12 @@
             }
           }
         `);
-        const existing = data.discountNodes.nodes.find(
-          (n) => n.discount.__typename === 'DiscountAutomaticApp' && n.discount.title === 'B2B trade shipping'
-        );
+        const appDiscounts = data.discountNodes.nodes.filter((n) => n.discount.__typename === 'DiscountAutomaticApp');
+        const existing = appDiscounts.find((n) => n.discount.title === 'B2B trade shipping');
 
         if (!existing) {
-          setStatus('err', 'Discount not found yet — activate "B2B trade shipping" above first, then reload this page.');
+          const found = appDiscounts.map((n) => n.discount.title).join(', ') || '(none)';
+          setStatus('err', `Discount not found yet (fetched ${data.discountNodes.nodes.length} discounts, app-owned ones found: ${found}) — activate "B2B trade shipping" above first, then reload this page.`);
           return;
         }
 
