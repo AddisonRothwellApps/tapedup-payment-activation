@@ -18,6 +18,12 @@
     .status.ok { background: #e6f6ec; color: #0a5c2e; }
     .status.err { background: #fdecec; color: #a11; }
     .status.info { background: #eef2ff; color: #33329b; }
+    .field-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+    .field-block { flex: 1 1 180px; border: 1px solid #e2e2e2; border-radius: 10px; padding: 12px 14px; }
+    .field-block label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px; }
+    .field-block .input-row { display: flex; align-items: center; gap: 4px; }
+    .field-block span.prefix { color: #888; font-size: 15px; }
+    .field-block input[type="number"] { border: 0; font-size: 18px; width: 100%; outline: none; font-family: inherit; }
   </style>
 </head>
 <body>
@@ -55,10 +61,17 @@
 
   <section>
     <h2>B2B trade shipping (free above threshold / flat rate below)</h2>
-    <p>Discounts whichever delivery option survives the panel above down to free (at/above the threshold) or a flat rate (below it) for customers tagged "b2b". <strong>Both numbers are set in the function's code</strong>, not here — see <code>tapedup-payment-rules/extensions/b2b-shipping-pricing/src/run.ts</code> to change them, then redeploy.</p>
+    <p>Discounts whichever delivery option survives the panel above down to free (at/above the threshold) or a flat rate (below it) for customers tagged "b2b".</p>
     <div id="status-b2b-ship-price" class="status info">Loading…</div>
     <div id="actions-b2b-ship-price"></div>
     <pre id="detail-b2b-ship-price" style="display:none"></pre>
+  </section>
+
+  <section>
+    <h2>B2B shipping amounts</h2>
+    <p>Change the threshold and flat rate here — saved straight into the discount above, no redeploy needed. (Requires that discount to exist first — activate the panel above once, then this one can find it.)</p>
+    <div id="status-b2b-ship-settings" class="status info">Loading…</div>
+    <div id="form-b2b-ship-settings"></div>
   </section>
 
   <script>
@@ -350,6 +363,110 @@
       }
     }
 
+    // ---- B2B shipping amounts: reads/writes the discount's own config
+    // metafield ($app:b2b-shipping-pricing / function-configuration), which
+    // is exactly what the function itself reads at checkout -- so saving
+    // here takes effect immediately, no redeploy. ----
+    const SHIP_CONFIG_NAMESPACE = '$app:b2b-shipping-pricing';
+    const SHIP_CONFIG_KEY = 'function-configuration';
+    const SHIP_DEFAULTS = { freeShippingThreshold: 100, flatRateBelowThreshold: 6 };
+
+    async function runShippingSettingsPanel() {
+      const statusEl = document.getElementById('status-b2b-ship-settings');
+      const formEl = document.getElementById('form-b2b-ship-settings');
+      const setStatus = (kind, text) => { statusEl.className = 'status ' + kind; statusEl.textContent = text; };
+
+      try {
+        setStatus('info', 'Looking up the discount…');
+        const data = await adminFetch(`
+          query {
+            discountNodes(first: 25) {
+              nodes {
+                id
+                discount {
+                  __typename
+                  ... on DiscountAutomaticApp {
+                    title
+                    metafield(namespace: "${SHIP_CONFIG_NAMESPACE}", key: "${SHIP_CONFIG_KEY}") { value }
+                  }
+                }
+              }
+            }
+          }
+        `);
+        const existing = data.discountNodes.nodes.find(
+          (n) => n.discount.__typename === 'DiscountAutomaticApp' && n.discount.title === 'B2B trade shipping'
+        );
+
+        if (!existing) {
+          setStatus('err', 'Discount not found yet — activate "B2B trade shipping" above first, then reload this page.');
+          return;
+        }
+
+        let current = SHIP_DEFAULTS;
+        try {
+          const raw = existing.discount.metafield?.value;
+          if (raw) current = { ...SHIP_DEFAULTS, ...JSON.parse(raw) };
+        } catch (err) { /* malformed value -- fall back to defaults */ }
+
+        formEl.innerHTML = `
+          <div class="field-row">
+            <div class="field-block">
+              <label for="ship-threshold">Free shipping threshold</label>
+              <div class="input-row"><span class="prefix">£</span><input id="ship-threshold" type="number" min="0" step="1" value="${current.freeShippingThreshold}"></div>
+            </div>
+            <div class="field-block">
+              <label for="ship-flat-rate">Flat rate below threshold</label>
+              <div class="input-row"><span class="prefix">£</span><input id="ship-flat-rate" type="number" min="0" step="0.01" value="${current.flatRateBelowThreshold}"></div>
+            </div>
+          </div>
+        `;
+        const btn = document.createElement('button');
+        btn.textContent = 'Save';
+        formEl.appendChild(btn);
+        setStatus('ok', 'Loaded current values.');
+
+        btn.onclick = async () => {
+          btn.disabled = true;
+          const threshold = Number(document.getElementById('ship-threshold').value);
+          const flatRate = Number(document.getElementById('ship-flat-rate').value);
+          if (!Number.isFinite(threshold) || threshold < 0 || !Number.isFinite(flatRate) || flatRate < 0) {
+            setStatus('err', 'Enter two valid, non-negative amounts.');
+            btn.disabled = false;
+            return;
+          }
+          try {
+            setStatus('info', 'Saving…');
+            const value = JSON.stringify({ freeShippingThreshold: threshold, flatRateBelowThreshold: flatRate });
+            const result = await adminFetch(`
+              mutation Save($metafields: [MetafieldsSetInput!]!) {
+                metafieldsSet(metafields: $metafields) {
+                  metafields { id value }
+                  userErrors { field message }
+                }
+              }
+            `, {
+              metafields: [{
+                ownerId: existing.id,
+                namespace: SHIP_CONFIG_NAMESPACE,
+                key: SHIP_CONFIG_KEY,
+                type: 'json',
+                value,
+              }],
+            });
+            if (result.metafieldsSet.userErrors.length) throw new Error(JSON.stringify(result.metafieldsSet.userErrors));
+            setStatus('ok', `Saved — £${threshold} threshold, £${flatRate.toFixed(2)} flat rate. Takes effect on the next checkout.`);
+          } catch (err) {
+            setStatus('err', 'Failed: ' + err.message);
+          } finally {
+            btn.disabled = false;
+          }
+        };
+      } catch (err) {
+        setStatus('err', 'Something went wrong: ' + err.message);
+      }
+    }
+
     runPaymentPanel();
     // A discount can't combine with another discount of its OWN class --
     // Shopify rejects the create with a "not supported with these
@@ -360,6 +477,7 @@
     runDiscountPanel('b2b-pricing', 'B2B trade pricing', 'B2B trade pricing', { orderDiscounts: true, productDiscounts: false, shippingDiscounts: true });
     runDeliveryVisibilityPanel();
     runDiscountPanel('b2b-ship-price', 'B2B trade shipping', 'B2B trade shipping', { orderDiscounts: true, productDiscounts: true, shippingDiscounts: false });
+    runShippingSettingsPanel();
   </script>
 </body>
 </html>
