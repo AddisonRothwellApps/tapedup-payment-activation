@@ -53,7 +53,7 @@
 
   <section>
     <h2>B2B shipping: hide other rates</h2>
-    <p>For customers tagged "b2b", keeps only the cheapest delivery option — plus a "Priority" one if you've created a rate with that word in its name — visible at checkout, and hides everything else, so they see their trade rate and an optional paid priority upgrade, not a full carrier-rate list.</p>
+    <p>Matches delivery options by name: any rate with "B2B" in its title is shown only to customers tagged "b2b" and hidden from everyone else; every other rate is shown only to regular customers and hidden from dealers. Create at least one shipping rate with "B2B" in its name (e.g. "B2B Standard Shipping") for dealers to have anything to check out with — optionally add a second one named e.g. "B2B Priority (24hr)" for a paid fast-shipping upgrade.</p>
     <div id="status-b2b-ship-vis" class="status info">Loading…</div>
     <div id="actions-b2b-ship-vis"></div>
     <pre id="detail-b2b-ship-vis" style="display:none"></pre>
@@ -61,7 +61,7 @@
 
   <section>
     <h2>B2B trade shipping (free above threshold / flat rate below)</h2>
-    <p>Discounts whichever delivery option survives the panel above down to free (at/above the threshold) or a flat rate (below it) for customers tagged "b2b".</p>
+    <p>For customers tagged "b2b", discounts any delivery option with "B2B" in its title down to free (at/above the threshold) or a flat rate (below it) — except one also named "Priority", which instead gets discounted down to a fixed price regardless of order value.</p>
     <div id="status-b2b-ship-price" class="status info">Loading…</div>
     <div id="actions-b2b-ship-price"></div>
     <pre id="detail-b2b-ship-price" style="display:none"></pre>
