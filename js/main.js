@@ -10,6 +10,7 @@ import * as orders from './views/orders.js';
 import * as offers from './views/offers.js';
 import * as followups from './views/followups.js';
 import * as setup from './views/setup.js';
+import * as importer from './views/import.js';
 
 const NAV = [
   { key: 'dashboard', href: '#/', label: 'Dashboard', icon: 'layout-dashboard' },
@@ -28,6 +29,7 @@ const ROUTES = [
   { nav: 'offers', re: /^\/offers$/, view: offers },
   { nav: 'follow-ups', re: /^\/follow-ups$/, view: followups },
   { nav: 'setup', re: /^\/setup$/, view: setup },
+  { nav: 'setup', re: /^\/import$/, view: importer },
 ];
 
 const app = document.getElementById('app');
@@ -117,9 +119,9 @@ async function start() {
   loadCachedOrders();
   renderSync();
   try {
-    loadingText = 'Loading customers…';
+    loadingText = 'Loading trade accounts…';
     renderView(false);
-    await loadCustomers((n) => { loadingText = `Loading customers… ${n}`; renderView(false); });
+    await loadCustomers((n) => { loadingText = `Loading trade accounts… ${n}`; renderView(false); });
   } catch (err) {
     state.customersError = err.message;
   }

@@ -1,8 +1,9 @@
-// One customer: who they are, how they're ordering, their starter offer,
-// account switches (trade / terms / stage / note) and the comms log.
+// One trade account: who they are (the details card), how they're ordering,
+// their starter offer, account switches (trade / terms / stage / note) and
+// the comms log.
 import {
   state, insights, isDealer, isTerms, label, sublabel, shortTape, offerStatus, describeOffer, offerHeadline, defaultTemplate, STATUS, STAGES, LOG_TYPES, TAGS,
-  setTag, setStage, saveNote, addLog, updateLog, deleteLog, removeOffer, revenueSeries, todayISO, addDaysISO,
+  setTag, setStage, saveNote, saveProfile, lastContact, orderSummary, addLog, updateLog, deleteLog, removeOffer, revenueSeries, todayISO, addDaysISO,
 } from '../store.js';
 import { html, raw, icon, money, money0, ago, fmtDate, dueLabel, trendBadge, statusChip, toast, openDrawer, busy, armed, columnChart, barList, adminUrl } from '../ui.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
@@ -25,20 +26,24 @@ export function render(el, numericId) {
   const tpl = defaultTemplate();
   const windowNote = state.ordersWindowStart && c.numberOfOrders > s.orders.length
     ? `Order history here goes back to ${fmtDate(state.ordersWindowStart)}; lifetime totals come straight from Shopify.` : '';
+  // Imported customers were "created" on import day; their first order says how long they've really been buying.
+  const oldest = allOrders.length ? allOrders[allOrders.length - 1].at : null;
+  const since = oldest && oldest < c.createdAt ? oldest : c.createdAt;
+  const contacted = lastContact(c);
+  const onlyImported = s.orders.length > 0 && s.orders.every((o) => o.imp);
 
   el.innerHTML = String(html`
     <div class="page">
       <a class="back" href="#/customers">${icon('arrow-left', 'i--sm')}Customers</a>
       <div class="page-head">
         <div style="min-width:0">
-          <p class="eyebrow">${isDealer(c) ? 'Trade account' : 'Customer'}</p>
+          <p class="eyebrow">${isDealer(c) ? 'Trade account' : 'No longer a trade account'}</p>
           <h1 class="h1">${label(c)}</h1>
           <div class="row row--wrap" style="margin-top:10px;gap:8px">
-            ${isDealer(c) ? html`<span class="badge badge--ink">Trade account</span>` : ''}
             ${isTerms(c) ? html`<span class="badge">Pays on terms</span>` : ''}
             ${c.crm.stage ? html`<span class="badge badge--cyan">${c.crm.stage}</span>` : ''}
             ${statusChip(s.status, STATUS)}
-            <span class="muted small">${[sublabel(c), c.email, c.phone, [c.city, c.country].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</span>
+            <span class="muted small">${[sublabel(c), c.email, c.phone, [c.city, c.country].filter(Boolean).join(', '), contacted ? `Last contacted ${ago(contacted)}` : ''].filter(Boolean).join(' · ')}</span>
           </div>
         </div>
         <div class="page-head__actions">
@@ -50,7 +55,7 @@ export function render(el, numericId) {
       </div>
 
       <div class="stats">
-        <div class="stat"><span class="stat__label">Lifetime spend</span><span class="stat__value">${money0(c.amountSpent)}</span><span class="stat__sub">Customer since ${fmtDate(c.createdAt)}</span></div>
+        <div class="stat"><span class="stat__label">Lifetime spend</span><span class="stat__value">${money0(c.amountSpent)}</span><span class="stat__sub">Customer since ${fmtDate(since)}</span></div>
         <div class="stat"><span class="stat__label">Orders</span><span class="stat__value">${c.numberOfOrders}</span><span class="stat__sub">${s.gap ? `Usually every ${Math.round(s.gap)} days` : 'Not enough orders for a pattern'}</span></div>
         <div class="stat"><span class="stat__label">Average order</span><span class="stat__value">${money0(s.aov)}</span><span class="stat__sub">Across all orders</span></div>
         <div class="stat"><span class="stat__label">Last order</span><span class="stat__value">${s.daysSince === null ? '—' : s.daysSince === 0 ? 'Today' : `${s.daysSince} day${s.daysSince === 1 ? '' : 's'}`}</span><span class="stat__sub">${s.lastAt ? `ago · ${fmtDate(s.lastAt)}` : 'Never ordered'}</span></div>
@@ -68,7 +73,7 @@ export function render(el, numericId) {
           <section class="card">
             <div class="card__head"><h2 class="h2">Best tapes</h2><span class="muted small">Units bought</span></div>
             ${s.products.length ? barList(s.products, { value: (p) => p.units, label: (p) => shortTape(p.title), format: (v) => `${v} units`, sub: (p) => money0(p.revenue) })
-              : html`<p class="muted small" style="margin:0">Nothing bought in the synced order history.</p>`}
+              : html`<p class="muted small" style="margin:0">${onlyImported ? 'Their orders came over from Notion as invoice totals, so there are no tapes to rank yet.' : 'Nothing bought in the synced order history.'}</p>`}
           </section>
 
           <section class="card card--flush">
@@ -79,7 +84,7 @@ export function render(el, numericId) {
                 <tr data-href="${o.id}" data-order="${o.id}">
                   <td class="nowrap"><span class="strong">${o.name}</span> ${o.x ? html`<span class="badge">Cancelled</span>` : ''}</td>
                   <td class="nowrap">${fmtDate(o.at)}</td>
-                  <td class="hide-sm clip" style="max-width:180px">${o.lines.reduce((n, l) => n + l[2], 0)} items · ${o.lines.map((l) => shortTape(l[0])).filter((v, i, a) => a.indexOf(v) === i).join(', ')}</td>
+                  <td class="hide-sm clip" style="max-width:180px">${orderSummary(o)}</td>
                   <td class="r">${money(o.total)}</td>
                   <td class="nowrap">${pretty(o.pay)}</td>
                   <td class="hide-sm nowrap">${pretty(o.ful)}</td>
@@ -93,6 +98,8 @@ export function render(el, numericId) {
         </div>
 
         <div class="stack">
+          ${detailsCard(c, contacted)}
+
           <section class="card">
             <div class="card__head"><h2 class="h2">Starter offer</h2>${offerState ? offerStatusChip(offerState) : ''}</div>
             ${c.offer ? html`
@@ -135,6 +142,7 @@ export function render(el, numericId) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
+  el.querySelector('[data-edit-details]').addEventListener('click', () => openDetailsDrawer(c));
   const email = el.querySelector('[data-email]');
   if (email) email.addEventListener('click', () => setTimeout(() => openLogDrawer(c, 'email'), 300));
   const call = el.querySelector('[data-call]');
@@ -169,6 +177,61 @@ export function render(el, numericId) {
   });
   el.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', () => busy(b, () => updateLog(c, b.dataset.done, { done: true })).then(() => toast('Follow-up done')).catch(() => {})));
   el.querySelectorAll('[data-del]').forEach((b) => armed(b, () => busy(b, () => deleteLog(c, b.dataset.del)).then(() => toast('Deleted')).catch(() => {}), 'Delete?'));
+}
+
+function detailsCard(c, contacted) {
+  const p = c.crm.profile;
+  const rows = [
+    ['Company', c.company],
+    ['Contact', c.contact || (c.name !== c.email && c.name !== c.company ? c.name : '')],
+    ['Email', c.email],
+    ['Other emails', (p.otherEmails || []).join(', ')],
+    ['Finance email', p.financeEmail],
+    ['Phone', c.phone],
+    ['Address', p.address],
+    ['Last contact', contacted ? `${fmtDate(contacted)} (${ago(contacted)})` : ''],
+  ].filter(([, v]) => v);
+  return html`<section class="card">
+    <div class="card__head"><h2 class="h2">Details</h2><button class="btn btn--ghost btn--sm" data-edit-details>${icon('pencil', 'i--sm')}Edit</button></div>
+    ${rows.length ? html`<dl class="details">${rows.map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)}</dl>` : html`<p class="muted small" style="margin:0">No details yet.</p>`}
+    ${(p.labels || []).length ? html`<div class="row row--wrap" style="gap:6px;margin-top:12px">${p.labels.map((l) => html`<span class="badge">${l}</span>`)}</div>` : ''}
+    ${p.notionId ? html`<p class="faint small" style="margin:12px 0 0">Brought over from Notion</p>` : ''}
+  </section>`;
+}
+
+/** Edits the CRM profile. The email and phone they sign in with stay in Shopify; these are for you. */
+function openDetailsDrawer(c) {
+  const p = c.crm.profile;
+  const field = (key, text, value, attrs = '') => html`<label class="field"><span>${text}</span><input class="input" data-p="${key}" value="${value || ''}" ${raw(attrs)} autocomplete="off"></label>`;
+  openDrawer({
+    eyebrow: label(c),
+    title: 'Edit details',
+    body: html`<form class="form" onsubmit="return false">
+      ${field('company', 'Company / gym', c.company)}
+      ${field('contact', 'Contact', c.contact, 'placeholder="Who you deal with"')}
+      <div class="form-row">${field('phone', 'Phone', p.phone || c.phone, 'type="tel"')}${field('financeEmail', 'Finance email', p.financeEmail, 'type="email"')}</div>
+      ${field('otherEmails', 'Other emails', (p.otherEmails || []).join(', '), 'placeholder="Separate with commas"')}
+      <label class="field"><span>Address</span><textarea class="textarea" data-p="address" rows="2">${p.address || ''}</textarea></label>
+      <label class="field"><span>Last contacted</span><input class="input" type="date" data-p="lastContacted" value="${(p.lastContacted || '').slice(0, 10)}" max="${todayISO()}"></label>
+      <label class="check"><input type="checkbox" data-visited ${(p.labels || []).includes('Visited') ? raw('checked') : ''}><span>Visited in person</span></label>
+      <p class="muted small" style="margin:0">Logging a call, email or visit updates "last contact" by itself. The email and phone they sign in with are changed in Shopify (${c.email || 'no email'}).</p>
+    </form>`,
+    foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save</button>`,
+    onMount(api) {
+      api.$('[data-save]').addEventListener('click', (e) => {
+        const v = (k) => api.$(`[data-p="${k}"]`).value.trim();
+        const labels = (p.labels || []).filter((l) => l !== 'Visited');
+        if (api.$('[data-visited]').checked) labels.push('Visited');
+        const patch = {
+          company: v('company'), contact: v('contact'), phone: v('phone'), financeEmail: v('financeEmail'),
+          otherEmails: v('otherEmails').split(/[,;\s]+/).filter((x) => x.includes('@')),
+          address: v('address'), lastContacted: v('lastContacted'), labels,
+        };
+        if (!patch.company) { toast('Add the company name', 'err'); return; }
+        busy(e.currentTarget, () => saveProfile(c, patch)).then(() => { toast('Details saved'); api.close(); }).catch(() => {});
+      });
+    },
+  });
 }
 
 function timelineItem(e, today) {

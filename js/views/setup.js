@@ -103,6 +103,7 @@ const SCOPES = [
   ['read_products', 'Products', 'Choosing starter-offer products'],
   ['read_orders', 'Orders', 'Dashboard, trends, order history'],
   ['read_all_orders', 'All orders (not just 60 days)', 'Trends, 12-month view, reorder patterns'],
+  ['write_orders', 'Create orders', 'Bringing order history over from Notion'],
 ];
 
 export function render(el) {
@@ -124,7 +125,7 @@ export function render(el) {
   el.innerHTML = String(html`
     <div class="page">
       <div class="page-head">
-        <div><p class="eyebrow">tapedup-payment-rules</p><h1 class="h1">Setup</h1></div>
+        <div><p class="eyebrow">Trade Hub</p><h1 class="h1">Setup</h1></div>
         <div class="page-head__actions"><button class="btn btn--outline" data-recheck ${loading ? 'disabled' : ''}>${icon('refresh-cw')}Check again</button></div>
       </div>
 
@@ -153,6 +154,14 @@ export function render(el) {
       </section>
 
       <section class="card">
+        <div class="card__head"><h2 class="h2">Import from Notion</h2><span class="muted small">One-off: the old dealer tracker</span></div>
+        <div class="fn" style="border-top:0;padding-top:0">
+          <p class="fn__desc" style="margin:0">Brings dealers over from the Notion export: company names, contacts, last-contacted dates and call notes into each customer here, and their invoices into Shopify as archived orders they can see in their account. You check every match before anything is saved.</p>
+          <a class="btn btn--sm btn--outline" href="#/import">${icon('file-up', 'i--sm')}Import</a>
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card__head"><h2 class="h2">What the app can see</h2></div>
         <div class="list">${SCOPES.map(([scope, label, use]) => { const ok = scope === 'read_all_orders' ? hasAllOrders() : hasScope(scope); return html`
           <div class="list__item"><span class="tl__icon ${ok ? '' : 'tl__icon--auto'}">${icon(ok ? 'check' : 'x', 'i--sm')}</span>
@@ -160,6 +169,7 @@ export function render(el) {
             <span class="status ${ok ? 'status--active' : 'status--lapsed'}">${ok ? 'Allowed' : 'Not yet'}</span></div>`; })}</div>
         ${SCOPES.some(([s]) => (s === 'read_all_orders' ? !hasAllOrders() : !hasScope(s))) ? html`<div class="notice notice--info" style="margin-top:14px">${icon('circle-alert')}<div>
           Missing permissions arrive with the next app deploy: open the app from Shopify admin and approve them when asked. "All orders" may need a one-off request in the app's dashboard (API access → Read all orders) before it can be added.</div></div>` : ''}
+        <p class="muted small" style="margin:14px 0 0">Trade Hub only loads customers tagged "b2b" (trade accounts) and their orders. Retail customers stay in Shopify's own screens.</p>
         <p class="muted small" style="margin:14px 0 0">If customer names or emails show blank, turn on protected customer data (name, email, phone) for this app in its dashboard.</p>
       </section>
     </div>`);

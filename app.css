@@ -1,4 +1,4 @@
-/* TapedUp admin — styled on the TapedUp Design System (Claude Design,
+/* Trade Hub (TapedUp) — styled on the TapedUp Design System (Claude Design,
    tapedup-theme-import/design/.../_ds/tapedup-design-system-*): tokens copied
    verbatim below, components extended for an admin surface (the system has no
    dashboard kit of its own). Same rules: cyan is the action colour, ink is type
@@ -310,6 +310,32 @@ button { font: inherit; }
 .fn:first-child { border-top: 0; padding-top: 0; }
 .fn__desc { font-size: var(--text-xs); color: var(--text-muted); margin: 2px 0 0; }
 
+/* ---- App name under the logo ---- */
+.app-name { display: block; margin-top: 8px; font: var(--weight-bold) var(--text-3xs)/1 var(--font-body); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--brand-accent); }
+.topbar .app-name { margin: 0; }
+
+/* ---- Customer details (CRM profile) ---- */
+.details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; margin: 0; font-size: var(--text-xs); }
+.details dt { font: var(--weight-bold) var(--text-3xs)/1.6 var(--font-body); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted); }
+.details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---- Import from Notion ---- */
+.imp__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, .8fr); gap: 10px 18px; padding: 16px 20px; border-top: 1px solid var(--border-subtle); align-items: start; }
+.imp__row.is-skipped { opacity: .55; }
+.imp__wide { grid-column: 1 / -1; }
+.imp__meta, .field > .imp__meta { font: var(--weight-regular) var(--text-2xs)/1.4 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--text-muted); }
+.imp__orders { display: grid; gap: 4px; padding-top: 20px; font-size: var(--text-xs); }
+.imp__notes { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: var(--text-2xs); color: var(--text-muted); }
+.imp__status { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-md); background: var(--tu-cyan-050); font-size: var(--text-xs); font-weight: var(--weight-semibold); }
+.imp__status a { margin-left: auto; }
+.imp__status--ok { background: #E8F7EE; }
+.imp__status--err { background: #FDE8EE; color: var(--state-danger-text); }
+.imp__status--skip { background: var(--surface-subtle); color: var(--text-muted); }
+.imp details summary { cursor: pointer; font-size: var(--text-2xs); font-weight: var(--weight-bold); color: var(--text-link); }
+.imp details[open] summary { margin-bottom: 8px; }
+.table--compact th, .table--compact td { padding-top: 6px; padding-bottom: 6px; font-size: var(--text-2xs); }
+.spinner--sm { width: 16px; height: 16px; border-width: 2px; flex: none; }
+
 /* ---- Responsive: sidebar folds into a top bar + menu drawer ---- */
 @media (max-width: 900px) {
   .app { grid-template-columns: minmax(0, 1fr); }
@@ -328,4 +354,6 @@ button { font: inherit; }
   .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .seg::-webkit-scrollbar { display: none; }
   .seg button { flex: none; }
+  .imp__row { grid-template-columns: minmax(0, 1fr); padding: 14px 16px; }
+  .imp__orders { padding-top: 0; }
 }

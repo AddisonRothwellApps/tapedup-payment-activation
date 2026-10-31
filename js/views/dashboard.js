@@ -1,13 +1,12 @@
 // Dashboard: how the business is doing over a period, who's buying the most,
 // who's ordering more or less, which tapes sell, and who needs a nudge.
-// The period + customer filters sit in one row and scope everything below.
-import { state, dashboard, insights, isDealer, label, sublabel, shortTape, followUps, STATUS, todayISO, hasAllOrders } from '../store.js';
+// Everything here is trade accounts only; the period filter scopes it all.
+import { state, dashboard, insights, label, sublabel, shortTape, followUps, STATUS, todayISO, hasAllOrders } from '../store.js';
 import { html, raw, icon, money0, count, delta, columnChart, barList, statusChip, ago, dueLabel, loadingBlock, trendBadge } from '../ui.js';
 import { openGiveOffer } from './offers.js';
 
-const ui = { days: 90, segment: 'all' };
+const ui = { days: 90 };
 const PERIODS = [[30, '30 days'], [90, '90 days'], [365, '12 months']];
-const SEGMENTS = [['all', 'All customers'], ['dealers', 'Trade'], ['retail', 'Retail']];
 
 export function render(el) {
   const today = todayISO();
@@ -18,15 +17,14 @@ export function render(el) {
   const maxDays = hasAllOrders() ? 365 : 30;
   if (ui.days > maxDays) ui.days = maxDays;
   const d = dashboard(ui);
-  const segmentFilter = (c) => ui.segment === 'all' || (ui.segment === 'dealers' ? isDealer(c) : !isDealer(c));
-  const attention = [...state.customers.values()].filter(segmentFilter).map((c) => ({ c, s: insights(c) }))
+  const attention = [...state.customers.values()].map((c) => ({ c, s: insights(c) }))
     .filter(({ s }) => ['due', 'risk'].includes(s.status)).sort((a, b) => b.c.amountSpent - a.c.amountSpent).slice(0, 6);
   const granularity = ui.days > 120 ? 'By month' : ui.days > 31 ? 'By week' : 'By day';
 
   el.innerHTML = String(html`
     <div class="page">
       <div class="page-head">
-        <div><p class="eyebrow">${state.shop.name}</p><h1 class="h1">Dashboard</h1></div>
+        <div><p class="eyebrow">${state.shop.name} · Trade Hub</p><h1 class="h1">Dashboard</h1></div>
         <div class="page-head__actions">
           <a class="btn btn--outline" href="#/customers">${icon('users')}Customers</a>
           <button class="btn" data-give>${icon('gift')}Give a starter offer</button>
@@ -48,7 +46,6 @@ export function render(el) {
 
       <div class="filters">
         <div class="seg" role="group" aria-label="Period">${PERIODS.map(([n, l]) => html`<button data-days="${n}" aria-pressed="${String(ui.days === n)}" ${n > maxDays ? raw('disabled title="Needs the read all orders permission"') : ''}>${l}</button>`)}</div>
-        <div class="seg" role="group" aria-label="Customers">${SEGMENTS.map(([k, l]) => html`<button data-seg="${k}" aria-pressed="${String(ui.segment === k)}">${l}</button>`)}</div>
         ${state.ordersSyncing ? html`<span class="muted small row">${icon('refresh-cw', 'i--sm')}Syncing orders… ${state.ordersProgress || ''}</span>` : ''}
       </div>
 
@@ -75,8 +72,7 @@ export function render(el) {
       <div class="grid grid--2 ${state.ordersSyncing ? 'is-stale' : ''}">
         <section class="card card--flush">
           <div class="card__head"><h2 class="h2">Best dealers</h2><span class="muted small">Revenue this period</span></div>
-          ${ui.segment === 'retail' ? html`<div class="empty"><span>Switch to All customers or Trade to rank your dealers.</span></div>`
-            : d.dealers.length ? html`<div class="table-wrap" style="margin-top:6px"><table class="table">
+          ${d.dealers.length ? html`<div class="table-wrap" style="margin-top:6px"><table class="table">
               <thead><tr><th></th><th>Dealer</th><th class="r">Revenue</th><th class="hide-sm">vs before</th><th class="r">Orders</th></tr></thead>
               <tbody>${d.dealers.map((r, i) => html`<tr data-href="#/customers/${r.customer.numericId}">
                 <td style="width:40px"><span class="rank ${i === 0 ? 'rank--1' : ''}">${i + 1}</span></td>
@@ -115,7 +111,6 @@ export function render(el) {
 
   el.querySelector('[data-give]').addEventListener('click', () => openGiveOffer());
   el.querySelectorAll('[data-days]').forEach((b) => b.addEventListener('click', () => { ui.days = Number(b.dataset.days); render(el); }));
-  el.querySelectorAll('[data-seg]').forEach((b) => b.addEventListener('click', () => { ui.segment = b.dataset.seg; render(el); }));
   el.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => { location.hash = tr.dataset.href; }));
   const chart = el.querySelector('[data-chart]');
   if (chart) columnChart(chart, d.series, { unit: 'Revenue' });
@@ -125,7 +120,7 @@ function moverList(rows, dir) {
   if (!rows.length) return html`<p class="muted small" style="margin:0 0 4px">Nobody yet.</p>`;
   return html`<div class="list">${rows.map((r) => html`
     <a class="list__item" href="#/customers/${r.customer.numericId}" style="color:inherit">
-      <span class="list__main"><span class="strong clip">${label(r.customer)}${isDealer(r.customer) ? html` <span class="badge badge--ink" style="margin-left:4px">Trade</span>` : ''}</span>
+      <span class="list__main"><span class="strong clip">${label(r.customer)}</span>
         <span class="muted small">${money0(r.cur)} vs ${money0(r.prev)}</span></span>
       <span class="trend trend--${dir}">${icon(dir === 'up' ? 'trending-up' : 'trending-down', 'i--sm')}${r.delta > 0 ? '+' : '−'}${money0(Math.abs(r.delta))}</span>
     </a>`)}</div>`;

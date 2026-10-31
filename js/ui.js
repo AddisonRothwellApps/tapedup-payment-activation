@@ -86,9 +86,15 @@ export function toast(text, kind = '') {
   }
   el.className = `toast${kind === 'err' ? ' toast--err' : ''}`;
   el.textContent = text;
-  requestAnimationFrame(() => el.classList.add('is-visible'));
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.classList.remove('is-visible'), kind === 'err' ? 6000 : 2800);
+  // Start the hide timer once it's actually shown: in a background tab the
+  // frame callback waits, and a timer started now would fire first and
+  // leave the toast stuck on screen.
+  requestAnimationFrame(() => {
+    el.classList.add('is-visible');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => el.classList.remove('is-visible'), kind === 'err' ? 6000 : 2800);
+  });
 }
 
 // ---- Drawer: the design system's slide-over shell, used for every form ----

@@ -1,10 +1,13 @@
-// Everything the admin knows, loaded from Shopify and shared by every view.
+// Everything Trade Hub knows, loaded from Shopify and shared by every view.
+// It only deals with trade accounts (customers tagged "b2b"); retail
+// customers and their orders are left to Shopify's own screens.
 // Nothing here has a server behind it -- data lives in Shopify itself:
 //   - customers: the Customer objects, plus two JSON metafields on each:
 //       tapedup.starter_offer  the live starter order (read by the
 //                              starter-order-discount function + the theme;
 //                              keep its shape in step with both)
-//       tapedup.crm            this app's CRM record: { stage, log: [...] }
+//       tapedup.crm            this app's CRM record:
+//                              { stage, profile: { company, contact, ... }, log: [...] }
 //   - orders: synced into memory and cached in localStorage (compact, no
 //     names or emails) so reopening the app only fetches what changed
 //   - starter-offer templates: an app-data metafield on this app's own
@@ -82,26 +85,38 @@ export const hasAllOrders = () => state.scopes.has('read_all_orders');
 // ---------------------------------------------------------------------------
 // Customers
 // ---------------------------------------------------------------------------
-const CUSTOMER_FIELDS = `
+export const CUSTOMER_FIELDS = `
   id displayName firstName lastName
   defaultEmailAddress { emailAddress }
   defaultPhoneNumber { phoneNumber }
   defaultAddress { company city countryCodeV2 }
   tags note createdAt numberOfOrders
   amountSpent { amount }
-  lastOrder { createdAt }
+  lastOrder { createdAt processedAt }
   offer: metafield(namespace: "${NS}", key: "${OFFER_KEY}") { value }
   crm: metafield(namespace: "${NS}", key: "${CRM_KEY}") { value }`;
 
+/**
+ * The CRM record. `profile` holds what Shopify's customer doesn't (or that
+ * came over from the old Notion tracker): company, contact, financeEmail,
+ * otherEmails, phone, address, labels, lastContacted, notionId. Unknown
+ * keys are kept so an older copy of the app can't strip a newer one's data.
+ */
 export function normalizeCrm(raw) {
-  return { stage: (raw && raw.stage) || '', log: raw && Array.isArray(raw.log) ? raw.log : [] };
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return {
+    ...r,
+    stage: r.stage || '',
+    profile: r.profile && typeof r.profile === 'object' ? r.profile : {},
+    log: Array.isArray(r.log) ? r.log : [],
+  };
 }
 
-function normalizeCustomer(node) {
+export function normalizeCustomer(node) {
   const id = numericId(node.id);
   const email = node.defaultEmailAddress && node.defaultEmailAddress.emailAddress;
   const fullName = [node.firstName, node.lastName].filter(Boolean).join(' ');
-  return {
+  return withProfile({
     id: node.id,
     numericId: id,
     // Name/email come back blank without protected-customer-data access.
@@ -109,8 +124,9 @@ function normalizeCustomer(node) {
     firstName: node.firstName || '',
     lastName: node.lastName || '',
     email: email || '',
-    phone: (node.defaultPhoneNumber && node.defaultPhoneNumber.phoneNumber) || '',
-    company: (node.defaultAddress && node.defaultAddress.company) || '',
+    shopifyPhone: (node.defaultPhoneNumber && node.defaultPhoneNumber.phoneNumber) || '',
+    addressCompany: (node.defaultAddress && node.defaultAddress.company) || '',
+    hasAddress: !!node.defaultAddress,
     city: (node.defaultAddress && node.defaultAddress.city) || '',
     country: (node.defaultAddress && node.defaultAddress.countryCodeV2) || '',
     tags: node.tags || [],
@@ -118,10 +134,22 @@ function normalizeCustomer(node) {
     createdAt: node.createdAt,
     numberOfOrders: Number(node.numberOfOrders) || 0,
     amountSpent: Number(node.amountSpent && node.amountSpent.amount) || 0,
-    lastOrderAt: (node.lastOrder && node.lastOrder.createdAt) || null,
+    // processedAt: an order imported with a back-dated date is "created" today.
+    lastOrderAt: (node.lastOrder && (node.lastOrder.processedAt || node.lastOrder.createdAt)) || null,
     offer: parseJson(node.offer && node.offer.value, null),
     crm: normalizeCrm(parseJson(node.crm && node.crm.value, null)),
-  };
+  });
+}
+
+// Fields that read through to the CRM profile, re-derived whenever it
+// changes. The CRM's company name wins: it's the one set here (or brought
+// over from Notion); the address one is whatever was typed at checkout.
+function withProfile(c) {
+  const p = c.crm.profile;
+  c.company = p.company || c.addressCompany;
+  c.contact = p.contact || '';
+  c.phone = c.shopifyPhone || p.phone || '';
+  return c;
 }
 
 function putCustomer(c) {
@@ -130,15 +158,22 @@ function putCustomer(c) {
   return c;
 }
 
+/** Adds (or replaces) a customer from a query that selected CUSTOMER_FIELDS. */
+export function rememberCustomer(node) {
+  const c = putCustomer(normalizeCustomer(node));
+  emit('customers');
+  return c;
+}
+
 export async function loadCustomers(onProgress) {
   const nodes = await paginate(
-    (n) => `query Customers($after: String) {
-      customers(first: ${n}, after: $after, sortKey: UPDATED_AT, reverse: true) {
+    (n) => `query Customers($after: String, $q: String) {
+      customers(first: ${n}, after: $after, query: $q, sortKey: UPDATED_AT, reverse: true) {
         pageInfo { hasNextPage endCursor }
         nodes { ${CUSTOMER_FIELDS} }
       }
     }`,
-    {}, (d) => d.customers, { pageSize: 80, onPage: onProgress },
+    { q: `tag:${TAGS.dealer}` }, (d) => d.customers, { pageSize: 80, onPage: onProgress },
   );
   state.customers = new Map();
   state.byNumericId = new Map();
@@ -157,15 +192,38 @@ export async function refreshCustomer(id) {
 
 export const isDealer = (c) => !!c && c.tags.includes(TAGS.dealer);
 export const isTerms = (c) => !!c && c.tags.includes(TAGS.terms);
-/** Trade accounts are known by their gym/shop name; everyone else by their own. */
-export const label = (c) => (!c ? '' : isDealer(c) && c.company ? c.company : c.name);
-/** The other half of label(): the contact for a trade account, the company for anyone else. */
-export const sublabel = (c) => (!c ? '' : label(c) !== c.name ? c.name : c.company);
+/** Trade accounts are known by their gym/shop name. */
+export const label = (c) => (!c ? '' : c.company || c.name);
+/** The other half of label(): who you deal with there. */
+export const sublabel = (c) => {
+  if (!c) return '';
+  if (c.contact) return c.contact;
+  return label(c) !== c.name && c.name !== c.email ? c.name : '';
+};
 /** "DOODLE Zinc Oxide Climbing Tape" -> "DOODLE" -- how the range is talked about. */
 export const shortTape = (title) => String(title || '').replace(/\s+(zinc oxide\s+)?climbing tape$/i, '').trim() || title;
 
-export async function createCustomer({ firstName, lastName, email, phone, company, note, dealer }) {
-  const input = { firstName, lastName, note: note || undefined, tags: dealer ? [TAGS.dealer] : [] };
+/** "36 items · DOODLE, CAUTION" for an order list; an imported Notion invoice has no products to list. */
+export function orderSummary(o) {
+  if (o.imp) return 'Invoice total from Notion';
+  const units = o.lines.reduce((n, l) => n + l[2], 0);
+  return `${units} item${units === 1 ? '' : 's'} · ${[...new Set(o.lines.map((l) => shortTape(l[0])))].join(', ')}`;
+}
+
+const CONTACT_TYPES = ['call', 'email', 'meeting', 'sample'];
+/** When you were last in touch: the latest call/email/visit/samples logged, or the date carried over from Notion. */
+export function lastContact(c) {
+  let latest = (c.crm.profile.lastContacted || '').slice(0, 10);
+  for (const e of c.crm.log) {
+    const day = String(e.at || '').slice(0, 10);
+    if (CONTACT_TYPES.includes(e.type) && day > latest) latest = day;
+  }
+  return latest || null;
+}
+
+/** Every customer added here is a trade account: tagged "b2b" for trade pricing and B2B shipping. */
+export async function createCustomer({ firstName, lastName, email, phone, company, note }) {
+  const input = { firstName, lastName, note: note || undefined, tags: [TAGS.dealer] };
   if (email) input.email = email;
   if (phone) input.phone = phone;
   if (company) input.addresses = [{ company, firstName, lastName }];
@@ -173,10 +231,17 @@ export async function createCustomer({ firstName, lastName, email, phone, compan
     customerCreate(input: $input) { customer { ${CUSTOMER_FIELDS} } userErrors { field message } }
   }`, { input }));
   const c = putCustomer(normalizeCustomer(data.customerCreate.customer));
-  await addLog(c, { type: 'auto', text: dealer ? 'Added as a trade account' : 'Customer added' });
+  await writeCrm(c, (crm) => ({
+    ...crm,
+    profile: { ...crm.profile, ...(company ? { company } : {}) },
+    log: [newLogEntry({ type: 'auto', text: 'Added as a trade account' }), ...crm.log],
+  }));
   emit('customers');
   return c;
 }
+
+/** Saves the details card (company, contact, emails, phone, address...) into the CRM profile. */
+export const saveProfile = (customer, patch) => writeCrm(customer, (crm) => ({ ...crm, profile: { ...crm.profile, ...patch } }));
 
 export async function setTag(customer, tag, on, logText) {
   const field = on ? 'tagsAdd' : 'tagsRemove';
@@ -205,7 +270,7 @@ export const LOG_TYPES = {
 };
 export const STAGES = ['Lead', 'Prospect', 'Customer', 'Key account', 'Inactive'];
 
-async function writeCrm(customer, mutate) {
+export async function writeCrm(customer, mutate) {
   // Re-read just before writing so two people logging on the same customer
   // don't overwrite each other's entries.
   const data = await gql(`query Crm($id: ID!) { customer(id: $id) { crm: metafield(namespace: "${NS}", key: "${CRM_KEY}") { value } } }`, { id: customer.id });
@@ -214,12 +279,13 @@ async function writeCrm(customer, mutate) {
     m: [{ ownerId: customer.id, namespace: NS, key: CRM_KEY, type: 'json', value: JSON.stringify(crm) }],
   }));
   customer.crm = crm;
+  withProfile(customer);
   emit('customer');
   return crm;
 }
 
-const newLogEntry = ({ type, text, at, followUp }) => ({
-  id: uid('l'), type: LOG_TYPES[type] ? type : 'note', at: at || new Date().toISOString(), text: text || '', followUp: followUp || '', done: false,
+export const newLogEntry = ({ id, type, text, at, followUp }) => ({
+  id: id || uid('l'), type: LOG_TYPES[type] ? type : 'note', at: at || new Date().toISOString(), text: text || '', followUp: followUp || '', done: false,
 });
 
 export const addLog = (customer, entry) => writeCrm(customer, (crm) => ({ ...crm, log: [newLogEntry(entry), ...crm.log] }));
@@ -389,8 +455,13 @@ export async function removeOffer(customer) {
 // ---------------------------------------------------------------------------
 // Orders: synced + cached, then everything below is computed from them
 // ---------------------------------------------------------------------------
+// Order history brought over from the old Notion tracker is tagged this
+// (see importer.js). Those orders are one "Trade order INV-0123" line at the
+// invoice value, so they count towards spend but not towards best tapes.
+export const IMPORT_TAG = 'notion-import';
+
 const ORDER_FIELDS = `
-  id name createdAt updatedAt cancelledAt test
+  id name createdAt processedAt updatedAt cancelledAt test tags
   displayFinancialStatus displayFulfillmentStatus
   customer { id }
   currentTotalPriceSet { shopMoney { amount } }
@@ -399,18 +470,21 @@ const ORDER_FIELDS = `
 const compactOrder = (o) => ({
   id: numericId(o.id),
   name: o.name,
-  at: o.createdAt,
+  // processedAt is when it was placed; an imported order is back-dated
+  // there but "created" on the day it was imported.
+  at: o.processedAt || o.createdAt,
   cust: o.customer ? numericId(o.customer.id) : null,
   total: Number(o.currentTotalPriceSet.shopMoney.amount) || 0,
   pay: o.displayFinancialStatus || '',
   ful: o.displayFulfillmentStatus || '',
   x: o.cancelledAt ? 1 : 0,
   test: o.test ? 1 : 0,
+  imp: (o.tags || []).includes(IMPORT_TAG) ? 1 : 0,
   // [product title, variant title, quantity, line total after line discounts]
   lines: o.lineItems.nodes.map((l) => [l.title, l.variantTitle || '', l.quantity, Number(l.discountedTotalSet.shopMoney.amount) || 0]),
 });
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const cacheKey = () => `tuAdminOrders:v${CACHE_VERSION}:${state.shop.myshopifyDomain}`;
 function readCache() {
   try { return JSON.parse(localStorage.getItem(cacheKey()) || 'null'); } catch (err) { return null; }
@@ -447,6 +521,32 @@ export function loadCachedOrders() {
   return true;
 }
 
+/**
+ * Only trade accounts' orders are synced: one search per 40 customers
+ * ("(customer_id:1 OR customer_id:2 ...) AND <date filter>"), so a store full
+ * of retail orders doesn't slow the app down. The cache remembers which
+ * customers it covers; anyone newly tagged "b2b" gets their whole window
+ * fetched, everyone else just what changed since the last sync.
+ */
+async function fetchOrdersFor(customerIds, filter, onProgress) {
+  const out = [];
+  for (const group of chunk(customerIds, 40)) {
+    const q = `(${group.map((id) => `customer_id:${id}`).join(' OR ')}) AND ${filter}`;
+    const nodes = await paginate(
+      (n) => `query Orders($after: String, $q: String) {
+        orders(first: ${n}, after: $after, query: $q, sortKey: UPDATED_AT) {
+          pageInfo { hasNextPage endCursor }
+          nodes { ${ORDER_FIELDS} }
+        }
+      }`,
+      { q }, (d) => d.orders,
+      { pageSize: 25, onPage: (count) => onProgress(out.length + count) },
+    );
+    out.push(...nodes);
+  }
+  return out;
+}
+
 export async function syncOrders({ full = false } = {}) {
   if (state.ordersSyncing) return;
   state.ordersSyncing = true;
@@ -456,20 +556,20 @@ export async function syncOrders({ full = false } = {}) {
   try {
     const windowStart = orderWindowStart();
     const cache = full ? null : readCache();
-    const incremental = cache && cache.syncedAt && cache.windowStart <= windowStart && cache.allOrders === hasAllOrders();
+    const usable = cache && cache.syncedAt && cache.windowStart <= windowStart && cache.allOrders === hasAllOrders();
+    const ids = [...state.customers.values()].map((c) => c.numericId);
+    const covered = new Set(usable ? cache.customers || [] : []);
+    const known = ids.filter((id) => covered.has(id));
+    const added = ids.filter((id) => !covered.has(id));
     const startedAt = new Date();
-    const query = incremental ? `updated_at:>='${cache.syncedAt}'` : `created_at:>='${windowStart}'`;
-    const fresh = await paginate(
-      (n) => `query Orders($after: String, $q: String) {
-        orders(first: ${n}, after: $after, query: $q, sortKey: UPDATED_AT) {
-          pageInfo { hasNextPage endCursor }
-          nodes { ${ORDER_FIELDS} }
-        }
-      }`,
-      { q: query }, (d) => d.orders,
-      { pageSize: 25, onPage: (count) => { state.ordersProgress = count; emit('orders-progress'); } },
-    );
-    const byId = new Map((incremental ? cache.orders : []).map((o) => [o.id, o]));
+    let done = 0;
+    const progress = (base) => (count) => { state.ordersProgress = base + count; emit('orders-progress'); };
+    const fresh = [];
+    if (known.length) fresh.push(...await fetchOrdersFor(known, `updated_at:>='${cache.syncedAt}'`, progress(done)));
+    done = fresh.length;
+    if (added.length) fresh.push(...await fetchOrdersFor(added, `processed_at:>='${windowStart}'`, progress(done)));
+    const keep = new Set(ids);
+    const byId = new Map((usable ? cache.orders : []).filter((o) => keep.has(o.cust)).map((o) => [o.id, o]));
     fresh.forEach((o) => byId.set(numericId(o.id), compactOrder(o)));
     state.orders = [...byId.values()].filter((o) => o.at.slice(0, 10) >= windowStart).sort((a, b) => b.at.localeCompare(a.at));
     state.ordersWindowStart = windowStart;
@@ -477,7 +577,7 @@ export async function syncOrders({ full = false } = {}) {
     state.ordersSyncedAt = new Date(startedAt.getTime() - 5 * 60000).toISOString();
     state.ordersCheckedAt = new Date().toISOString();
     indexOrders();
-    writeCache({ syncedAt: state.ordersSyncedAt, checkedAt: state.ordersCheckedAt, windowStart, allOrders: hasAllOrders(), orders: state.orders });
+    writeCache({ syncedAt: state.ordersSyncedAt, checkedAt: state.ordersCheckedAt, windowStart, allOrders: hasAllOrders(), customers: ids, orders: state.orders });
   } catch (err) {
     state.ordersError = err.message;
   } finally {
@@ -520,6 +620,7 @@ export function compare(orders, days, now = Date.now()) {
 export function topProducts(orders, limit = 6) {
   const map = new Map();
   for (const o of orders) {
+    if (o.imp) continue; // one lump-sum line, no products to rank
     for (const [title, , qty, amount] of o.lines) {
       const row = map.get(title) || { title, units: 0, revenue: 0 };
       row.units += qty;
@@ -532,7 +633,9 @@ export function topProducts(orders, limit = 6) {
 
 export function insights(c, now = Date.now()) {
   const orders = (state.ordersByCustomer.get(c.numericId) || []).filter(countable);
-  const lastAt = c.lastOrderAt || (orders[0] && orders[0].at) || null;
+  // Synced orders first: Shopify's lastOrder is the last one *created*,
+  // which after an import can be an old back-dated order.
+  const lastAt = (orders[0] && orders[0].at) || c.lastOrderAt || null;
   const daysSince = lastAt ? Math.floor((now - Date.parse(lastAt)) / DAY) : null;
   const times = orders.map((o) => Date.parse(o.at)).sort((a, b) => a - b);
   const gaps = times.slice(1).map((t, i) => (t - times[i]) / DAY);
@@ -593,15 +696,10 @@ export function revenueSeries(orders, days, now = Date.now()) {
   return buckets;
 }
 
-export function dashboard({ days, segment }, now = Date.now()) {
+export function dashboard({ days }, now = Date.now()) {
   const start = now - days * DAY;
   const prevStart = now - 2 * days * DAY;
-  const inSegment = (o) => {
-    if (segment === 'all') return true;
-    const dealer = isDealer(state.byNumericId.get(o.cust));
-    return segment === 'dealers' ? dealer : !dealer;
-  };
-  const all = state.orders.filter(countable).filter(inSegment);
+  const all = state.orders.filter(countable);
   const cur = all.filter((o) => Date.parse(o.at) >= start);
   const prev = all.filter((o) => { const t = Date.parse(o.at); return t >= prevStart && t < start; });
   const comparable = !!state.ordersWindowStart && Date.parse(state.ordersWindowStart) <= prevStart + DAY;
@@ -617,7 +715,7 @@ export function dashboard({ days, segment }, now = Date.now()) {
     per.set(o.cust, row);
   }
   const rows = [...per.entries()].map(([id, r]) => ({ customer: state.byNumericId.get(id), ...r })).filter((r) => r.customer);
-  const dealers = rows.filter((r) => isDealer(r.customer) && r.cur > 0).sort((a, b) => b.cur - a.cur).slice(0, 8)
+  const dealers = rows.filter((r) => r.cur > 0).sort((a, b) => b.cur - a.cur).slice(0, 8)
     .map((r) => ({ ...r, topProduct: (topProducts(r.list, 1)[0] || {}).title || '' }));
   const movers = comparable ? rows.filter((r) => r.prev > 0 || r.cur > 0).map((r) => ({ ...r, delta: r.cur - r.prev })) : [];
 

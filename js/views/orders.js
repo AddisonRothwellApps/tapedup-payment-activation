@@ -1,8 +1,9 @@
 // Trade orders: every synced order from a trade account (tagged "b2b"),
-// with who placed it, what was in it and where it's up to. Retail orders
-// are left to Shopify's own Orders screen. Fulfilling, refunding and editing stay in Shopify's own order
-// screen, one click away.
-import { state, isDealer, hasAllOrders, label, sublabel, shortTape } from '../store.js';
+// with who placed it, what was in it and where it's up to. Only trade
+// accounts' orders are synced (retail stays in Shopify's own Orders screen).
+// Fulfilling, refunding and editing stay in Shopify's own order screen, one
+// click away.
+import { state, hasAllOrders, label, sublabel, orderSummary } from '../store.js';
 import { html, icon, money, fmtDate, adminUrl } from '../ui.js';
 
 const ui = { q: '', status: 'all', limit: 100, open: new Set() };
@@ -15,7 +16,7 @@ function rows() {
   return state.orders.filter((o) => {
     if (o.test) return false;
     const c = state.byNumericId.get(o.cust);
-    if (!isDealer(c)) return false;
+    if (!c) return false;
     if (ui.status === 'unfulfilled' && (o.x || !['UNFULFILLED', 'PARTIALLY_FULFILLED', 'IN_PROGRESS', 'ON_HOLD', 'SCHEDULED'].includes(o.ful))) return false;
     if (ui.status === 'unpaid' && (o.x || !UNPAID.includes(o.pay))) return false;
     if (ui.status === 'cancelled' && !o.x) return false;
@@ -65,7 +66,7 @@ function renderResults(el) {
               <td class="nowrap"><span class="strong">${o.name}</span>${o.x ? html` <span class="badge">Cancelled</span>` : ''}</td>
               <td class="nowrap">${fmtDate(o.at)}</td>
               <td><a class="cust" href="#/customers/${c.numericId}"><span class="cust__name clip" style="font-size:13px">${label(c)}</span>${sublabel(c) ? html`<span class="cust__sub clip">${sublabel(c)}</span>` : ''}</a></td>
-              <td class="hide-sm clip" style="max-width:260px">${o.lines.reduce((n, l) => n + l[2], 0)} × ${o.lines.map((l) => shortTape(l[0])).filter((v, i, a) => a.indexOf(v) === i).join(', ')}</td>
+              <td class="hide-sm clip" style="max-width:260px">${orderSummary(o)}</td>
               <td class="r">${money(o.total)}</td>
               <td class="nowrap">${pretty(o.pay)}</td>
               <td class="nowrap">${pretty(o.ful)}</td>
