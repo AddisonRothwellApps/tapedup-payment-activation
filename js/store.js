@@ -54,6 +54,7 @@ export const addDaysISO = (iso, days) => {
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+const chunk = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n));
 const uid = (prefix) => prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 // ---------------------------------------------------------------------------
@@ -246,13 +247,54 @@ export function offerStatus(c) {
   return 'Waiting';
 }
 
+const pounds = (n) => `£${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`;
+export const round2 = (n) => Math.round(n * 100) / 100;
+const pctText = (n) => `${Math.round(Number(n) * 10) / 10}%`;
+
+/** "£150 pack" for a fixed-price pack; older offers were set as a % or £ off. */
 export function offerHeadline(o) {
-  return o.discountType === 'fixedAmount' ? `£${Number(o.discountValue).toFixed(Number(o.discountValue) % 1 ? 2 : 0)} off` : `${o.discountValue}% off`;
+  if (o.packPrice) return `${pounds(o.packPrice)} pack`;
+  return o.discountType === 'fixedAmount' ? `${pounds(o.discountValue)} off` : `${o.discountValue}% off`;
 }
 
 export function describeOffer(o) {
   const units = (o.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-  return `${units} item${units === 1 ? '' : 's'} · ${offerHeadline(o)} the whole order`;
+  const what = `${units} item${units === 1 ? '' : 's'}`;
+  if (o.packPrice) return `${what} · ${pounds(o.packPrice)} for the pack (${pctText(o.discountValue)} off trade)`;
+  return `${what} · ${offerHeadline(o)} the whole order`;
+}
+
+// ---- Trade prices -------------------------------------------------------
+// Same rule as the b2b-wholesale-pricing function in tapedup-payment-rules:
+// a variant's custom.wholesale_price if it undercuts the selling price (a
+// wholesale price that doesn't undercut means no trade discount at all),
+// otherwise a flat % off. Keep TRADE_FALLBACK_PERCENT in step with
+// FALLBACK_DISCOUNT_PERCENT in that function.
+export const TRADE_FALLBACK_PERCENT = 20;
+const priceCache = new Map(); // variant gid -> { retail, trade } (null if the variant is gone)
+
+function tradePriceOf(node) {
+  const retail = Number(node.price) || 0;
+  const wholesale = node.wholesale && node.wholesale.jsonValue;
+  if (wholesale && wholesale.amount !== undefined) {
+    const amount = Number(wholesale.amount);
+    return { retail, trade: Number.isFinite(amount) && amount < retail ? amount : retail };
+  }
+  return { retail, trade: round2(retail * (1 - TRADE_FALLBACK_PERCENT / 100)) };
+}
+
+/** Map of variant gid -> { retail, trade } per unit, or null for a deleted variant. */
+export async function tradePrices(variantIds) {
+  const ids = [...new Set(variantIds)];
+  const missing = ids.filter((id) => !priceCache.has(id));
+  for (const group of chunk(missing, 100)) {
+    const data = await gql(`query Prices($ids: [ID!]!) { nodes(ids: $ids) { ... on ProductVariant {
+      id price wholesale: metafield(namespace: "custom", key: "wholesale_price") { jsonValue }
+    } } }`, { ids: group });
+    group.forEach((id) => priceCache.set(id, null));
+    for (const node of data.nodes) if (node && node.id) priceCache.set(node.id, tradePriceOf(node));
+  }
+  return new Map(ids.map((id) => [id, priceCache.get(id)]));
 }
 
 /** A template's expiry is relative ("14 days after it's given"); an offer's is a date. */
@@ -261,6 +303,9 @@ export function offerFromTemplate(t) {
     items: (t.items || []).map(({ productId, variantId, title, image, quantity }) => ({ productId, variantId, title, image, quantity })),
     discountType: t.discountType === 'fixedAmount' ? 'fixedAmount' : 'percentage',
     discountValue: Number(t.discountValue) || 0,
+    // The pack price is what's promised; the % is re-worked from today's
+    // trade prices when the offer is given (see the offer form).
+    ...(t.packPrice ? { packPrice: Number(t.packPrice), tradeTotal: Number(t.tradeTotal) || 0 } : {}),
     message: t.message || '',
     expiresOn: t.expiresInDays ? addDaysISO(todayISO(), Number(t.expiresInDays)) : '',
     autoAdd: t.autoAdd !== false,
@@ -281,7 +326,6 @@ export async function saveTemplates(list) {
 
 export function newTemplateId() { return uid('t'); }
 
-const chunk = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n));
 
 /**
  * Gives `offer` (from offerFromTemplate, or edited) to every customer in the

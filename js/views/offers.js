@@ -1,13 +1,15 @@
 // Starter offers: reusable templates (saved once, given to any number of
-// customers) and the list of customers who currently have one.
+// customers) and the list of customers who currently have one. Offers are
+// priced as a pack: you set what the whole starter order costs, the form
+// shows each item at its trade price, and the % off is worked out from that.
 import {
   state, offerStatus, describeOffer, offerHeadline, offerFromTemplate, defaultTemplate, saveTemplates, newTemplateId,
-  giveOffer, removeOffer, isDealer, todayISO, label, sublabel,
+  giveOffer, removeOffer, isDealer, todayISO, label, sublabel, tradePrices, round2,
 } from '../store.js';
-import { html, raw, icon, fmtDate, ago, toast, openDrawer, busy, armed } from '../ui.js';
+import { html, raw, icon, money, fmtDate, ago, toast, openDrawer, busy, armed } from '../ui.js';
 
 const ui = { show: 'Waiting' };
-const BLANK_TEMPLATE = () => ({ id: '', name: '', isDefault: false, items: [], discountType: 'percentage', discountValue: 10, message: 'Welcome to TapedUp! Your starter order is ready.', expiresInDays: 30, autoAdd: true });
+const BLANK_TEMPLATE = () => ({ id: '', name: '', isDefault: false, items: [], packPrice: '', message: 'Welcome to TapedUp! Your starter order is ready.', expiresInDays: 30, autoAdd: true });
 
 export function render(el) {
   const withOffer = [...state.customers.values()].filter((c) => c.offer).map((c) => ({ c, status: offerStatus(c) }));
@@ -26,13 +28,13 @@ export function render(el) {
         </div>
       </div>
       <div class="notice notice--info">${icon('circle-alert')}<div>
-        Make a template once, then give it to as many customers as you like. Each customer gets a banner on the site, the products drop into their cart when they log in, and the discount comes off their whole order at checkout. It switches itself off after their next order.
+        Make a template once, then give it to as many trade accounts as you like. You set one price for the whole pack; it's taken off their trade prices at checkout. Each customer gets a banner on the site, the products drop into their cart when they log in, and it switches itself off after their next order.
       </div></div>
 
       <section class="stack" style="gap:12px">
         <h2 class="h3">Templates</h2>
         ${state.templates.length ? html`<div class="cards">${state.templates.map(templateCard)}</div>` : html`
-          <div class="card empty">${icon('gift')}<strong class="strong">No templates yet</strong><span>Set up your standard starter order once: the products, the discount and how long it lasts.</span>
+          <div class="card empty">${icon('gift')}<strong class="strong">No templates yet</strong><span>Set up your standard starter pack once: the products, the pack price and how long it lasts.</span>
             <button class="btn" data-new-template>${icon('plus')}Create your first template</button></div>`}
       </section>
 
@@ -79,7 +81,10 @@ function templateCard(t) {
       <strong class="strong clip">${t.name}</strong>
       ${t.isDefault ? html`<span class="badge badge--accent">Default</span>` : ''}
     </div>
-    <div class="offer__off">${offerHeadline(t)}</div>
+    <div>
+      <div class="offer__off">${offerHeadline(t)}</div>
+      ${t.packPrice && t.tradeTotal ? html`<div class="muted small">Trade price ${money(t.tradeTotal)} · ${Math.round(Number(t.discountValue) * 10) / 10}% off</div>` : ''}
+    </div>
     <ul class="offer__items">${(t.items || []).map((i) => html`<li>${i.image ? html`<img class="thumb" src="${thumb(i.image)}" alt="">` : html`<span class="thumb"></span>`}<span><b>${i.quantity} ×</b> ${i.title}</span></li>`)}</ul>
     <div class="muted small">${t.expiresInDays ? `Lasts ${t.expiresInDays} days after it's given` : 'No expiry'} · ${t.autoAdd !== false ? 'Auto-adds to cart' : 'Banner only'}</div>
     <div class="row row--wrap" style="gap:6px">
@@ -109,52 +114,123 @@ function wireTemplateCard(card) {
 const thumb = (src) => (src ? src + (src.includes('?') ? '&' : '?') + 'width=80' : '');
 
 // ---------------------------------------------------------------------------
-// Shared offer fields: products + discount + expiry + message + auto-add.
+// The offer form, shared by the template editor and "give an offer":
+// products at trade price, one pack price, expiry, site message, auto-add.
 // mode 'template' stores expiry as "days after it's given"; 'offer' as a date.
+//
+// The pack price is turned into a % off the whole order (an order discount
+// applies after trade pricing, so for a trade account whose cart is exactly
+// the pack, that % lands on the pack price). It's always worked out from
+// trade prices as they are right now, so a template saved months ago still
+// charges its pack price after a price change.
 // ---------------------------------------------------------------------------
-function offerFields(d, mode) {
-  return html`
+function mountOfferForm(box, d, mode) {
+  const prices = new Map(); // variant gid -> { retail, trade } | null (deleted)
+  let loading = false;
+  let loadError = '';
+  let derived = false;
+
+  box.innerHTML = String(html`
     <div class="field"><span>Products</span>
       <div data-items></div>
       <button class="btn btn--outline btn--sm" type="button" data-pick style="justify-self:start">${icon('package', 'i--sm')}Choose products</button>
     </div>
-    <div class="form-row">
-      <label class="field"><span>Discount</span>
-        <select class="select" data-type>
-          <option value="percentage" ${d.discountType !== 'fixedAmount' ? raw('selected') : ''}>% off the whole order</option>
-          <option value="fixedAmount" ${d.discountType === 'fixedAmount' ? raw('selected') : ''}>£ off the whole order</option>
-        </select></label>
-      <label class="field"><span>Amount</span>
-        <span class="input-affix"><b data-prefix></b><input class="input" type="number" min="0" step="0.01" data-value value="${d.discountValue}"><b data-suffix></b></span></label>
+    <div class="pack">
+      <div class="pack__totals">
+        <div><span class="label">Trade price</span><strong class="pack__trade num" data-trade-total>—</strong></div>
+        <div><span class="label">RRP</span><span class="muted num" data-retail-total>—</span></div>
+      </div>
+      <label class="field"><span>Starter pack price</span>
+        <span class="input-affix"><b>£</b><input class="input" type="number" min="0" step="0.01" data-pack value="${d.packPrice || ''}" placeholder="What they pay for the whole pack"></span></label>
+      <p class="pack__calc" data-calc aria-live="polite"></p>
     </div>
     ${mode === 'template'
       ? html`<label class="field"><span>Lasts for</span><span class="input-affix"><input class="input" type="number" min="0" step="1" data-days value="${d.expiresInDays || ''}" placeholder="No expiry"><b>days after it's given</b></span></label>`
       : html`<label class="field"><span>Expires (optional)</span><input class="input" type="date" data-expires value="${d.expiresOn || ''}" min="${todayISO()}"></label>`}
     <label class="field"><span>Message on the site</span><input class="input" type="text" maxlength="120" data-message value="${d.message || ''}"></label>
-    <label class="check"><input type="checkbox" data-autoadd ${d.autoAdd !== false ? raw('checked') : ''}><span>Put the products in their cart automatically on their next visit <span class="muted">(otherwise the banner just offers them)</span></span></label>`;
-}
+    <label class="check"><input type="checkbox" data-autoadd ${d.autoAdd !== false ? raw('checked') : ''}><span>Put the products in their cart automatically on their next visit <span class="muted">(otherwise the banner just offers them)</span></span></label>`);
+  const $ = (s) => box.querySelector(s);
+  const packInput = $('[data-pack]');
 
-function wireOfferFields(root, d) {
-  const $ = (s) => root.querySelector(s);
-  const syncUnit = () => {
-    const fixed = $('[data-type]').value === 'fixedAmount';
-    $('[data-prefix]').textContent = fixed ? '£' : '';
-    $('[data-suffix]').textContent = fixed ? '' : '%';
+  const totals = () => {
+    let trade = 0;
+    let retail = 0;
+    let missing = 0;
+    for (const item of d.items) {
+      const p = prices.get(item.variantId);
+      if (!p) { missing += 1; continue; }
+      trade += p.trade * (Number(item.quantity) || 0);
+      retail += p.retail * (Number(item.quantity) || 0);
+    }
+    return { trade: round2(trade), retail: round2(retail), missing };
   };
-  $('[data-type]').addEventListener('change', syncUnit);
-  syncUnit();
+
+  const calc = () => {
+    const t = totals();
+    const ready = !loading && !loadError && d.items.length && !t.missing;
+    $('[data-trade-total]').textContent = loading ? 'Loading…' : ready ? money(t.trade) : '—';
+    $('[data-retail-total]').textContent = ready ? money(t.retail) : '—';
+    d.items.forEach((item, i) => {
+      const cell = box.querySelector(`[data-line="${i}"]`);
+      const p = prices.get(item.variantId);
+      if (cell) cell.textContent = p ? money(p.trade * (Number(item.quantity) || 0)) : '';
+    });
+    const pack = Number(packInput.value);
+    const out = $('[data-calc]');
+    out.className = 'pack__calc';
+    if (loadError) { out.textContent = `Couldn't load trade prices: ${loadError}`; out.classList.add('pack__calc--err'); return; }
+    if (!d.items.length) { out.textContent = 'Choose the products to see their trade price.'; return; }
+    if (loading) { out.textContent = 'Looking up trade prices…'; return; }
+    if (t.missing) { out.textContent = `${t.missing} product${t.missing === 1 ? ' is' : 's are'} no longer in Shopify. Remove ${t.missing === 1 ? 'it' : 'them'} to price the pack.`; out.classList.add('pack__calc--err'); return; }
+    if (!(pack > 0)) { out.textContent = 'Set what they pay for the whole pack. The % off is worked out for you.'; return; }
+    if (pack >= t.trade) { out.textContent = `That isn't below the trade price of ${money(t.trade)}.`; out.classList.add('pack__calc--err'); return; }
+    const pct = round2((1 - pack / t.trade) * 100);
+    out.innerHTML = String(html`<strong>${pct}% off</strong> trade prices: they save ${money(t.trade - pack)}. It's applied as ${pct}% off their whole order at checkout, so anything extra they add gets it too.`);
+  };
+
   const renderItems = () => {
-    const box = $('[data-items]');
-    box.innerHTML = d.items.length ? String(html`<div class="list">${d.items.map((item, i) => html`
-      <div class="list__item">
+    const list = $('[data-items]');
+    list.innerHTML = d.items.length ? String(html`<div class="list">${d.items.map((item, i) => {
+      const p = prices.get(item.variantId);
+      return html`<div class="list__item">
         ${item.image ? html`<img class="thumb" src="${thumb(item.image)}" alt="">` : html`<span class="thumb"></span>`}
-        <span class="list__main clip">${item.title}</span>
-        <input class="input input--sm num" style="width:72px" type="number" min="1" step="1" value="${item.quantity}" data-qty="${i}" aria-label="Quantity of ${item.title}">
+        <span class="list__main"><span class="clip">${item.title}</span>
+          <span class="muted small">${p ? html`Trade ${money(p.trade)} · <span class="faint">RRP ${money(p.retail)}</span>` : prices.has(item.variantId) ? 'No longer in Shopify' : 'Trade price…'}</span></span>
+        <input class="input input--sm num" style="width:68px" type="number" min="1" step="1" value="${item.quantity}" data-qty="${i}" aria-label="Quantity of ${item.title}">
+        <span class="num strong nowrap" style="width:72px;text-align:right" data-line="${i}"></span>
         <button class="btn btn--ghost btn--icon" type="button" data-drop="${i}" aria-label="Remove ${item.title}">${icon('x', 'i--sm')}</button>
-      </div>`)}</div>`) : String(html`<p class="muted small" style="margin:0">No products yet.</p>`);
-    box.querySelectorAll('[data-qty]').forEach((input) => input.addEventListener('input', () => { d.items[Number(input.dataset.qty)].quantity = Number(input.value); }));
-    box.querySelectorAll('[data-drop]').forEach((b) => b.addEventListener('click', () => { d.items.splice(Number(b.dataset.drop), 1); renderItems(); }));
+      </div>`;
+    })}</div>`) : String(html`<p class="muted small" style="margin:0">No products yet.</p>`);
+    list.querySelectorAll('[data-qty]').forEach((input) => input.addEventListener('input', () => { d.items[Number(input.dataset.qty)].quantity = Number(input.value); calc(); }));
+    list.querySelectorAll('[data-drop]').forEach((b) => b.addEventListener('click', () => { d.items.splice(Number(b.dataset.drop), 1); renderItems(); calc(); }));
   };
+
+  const load = async () => {
+    const need = d.items.map((i) => i.variantId).filter((id) => !prices.has(id));
+    if (!need.length) { renderItems(); calc(); return; }
+    loading = true;
+    loadError = '';
+    calc();
+    try {
+      (await tradePrices(need)).forEach((p, id) => prices.set(id, p));
+    } catch (err) {
+      loadError = err.message;
+    } finally {
+      loading = false;
+    }
+    // An offer from before pack pricing was a % or £ off: show it as the
+    // pack price it works out to, so it can be edited the new way.
+    const t = totals();
+    if (!derived && !packInput.value && d.discountValue && !t.missing && t.trade) {
+      derived = true;
+      const pack = d.discountType === 'fixedAmount' ? t.trade - Number(d.discountValue) : t.trade * (1 - Number(d.discountValue) / 100);
+      if (pack > 0) packInput.value = round2(pack).toFixed(2);
+    }
+    renderItems();
+    calc();
+  };
+
+  packInput.addEventListener('input', calc);
   $('[data-pick]').addEventListener('click', async () => {
     // Pre-select what's chosen (grouped by product, as the picker expects)
     // so re-opening it adds to or trims the list; quantities survive.
@@ -179,25 +255,35 @@ function wireOfferFields(root, d) {
       quantity: qty.get(v.id) || 1,
     })));
     renderItems();
+    load();
   });
-  renderItems();
-}
+  load();
 
-function readOfferFields(root, d, mode) {
-  const $ = (s) => root.querySelector(s);
-  d.discountType = $('[data-type]').value;
-  d.discountValue = Number($('[data-value]').value);
-  d.message = $('[data-message]').value.trim();
-  d.autoAdd = $('[data-autoadd]').checked;
-  if (mode === 'template') d.expiresInDays = $('[data-days]').value ? Number($('[data-days]').value) : '';
-  else d.expiresOn = $('[data-expires]').value;
-  if (!d.items.length) return 'Choose at least one product.';
-  if (d.items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) return 'Every product needs a whole-number quantity of at least 1.';
-  if (!(d.discountValue > 0)) return 'Enter a discount above 0.';
-  if (d.discountType === 'percentage' && d.discountValue > 100) return "A percentage discount can't be over 100.";
-  if (mode === 'template' && d.expiresInDays !== '' && (!Number.isInteger(d.expiresInDays) || d.expiresInDays < 1)) return 'Days must be a whole number, or leave it blank for no expiry.';
-  if (mode === 'offer' && d.expiresOn && d.expiresOn < todayISO()) return 'The expiry date is in the past.';
-  return null;
+  return {
+    /** Validates and writes the form into d; returns a problem message or null. */
+    read() {
+      d.message = $('[data-message]').value.trim();
+      d.autoAdd = $('[data-autoadd]').checked;
+      if (mode === 'template') d.expiresInDays = $('[data-days]').value ? Number($('[data-days]').value) : '';
+      else d.expiresOn = $('[data-expires]').value;
+      if (!d.items.length) return 'Choose at least one product.';
+      if (d.items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) return 'Every product needs a whole-number quantity of at least 1.';
+      if (loading) return 'Still looking up trade prices. Try again in a moment.';
+      if (loadError) return `Couldn't load trade prices: ${loadError}`;
+      const t = totals();
+      if (t.missing) return 'Some products are no longer in Shopify. Remove them first.';
+      const pack = Number(packInput.value);
+      if (!(pack > 0)) return 'Set the starter pack price.';
+      if (pack >= t.trade) return `The pack price has to be below the trade price (${money(t.trade)}).`;
+      d.packPrice = round2(pack);
+      d.tradeTotal = t.trade;
+      d.discountType = 'percentage';
+      d.discountValue = round2((1 - pack / t.trade) * 100);
+      if (mode === 'template' && d.expiresInDays !== '' && (!Number.isInteger(d.expiresInDays) || d.expiresInDays < 1)) return 'Days must be a whole number, or leave it blank for no expiry.';
+      if (mode === 'offer' && d.expiresOn && d.expiresOn < todayISO()) return 'The expiry date is in the past.';
+      return null;
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -209,21 +295,26 @@ export function openTemplateEditor(existing) {
   openDrawer({
     eyebrow: 'Starter offer template',
     title: d.id ? 'Edit template' : 'New template',
-    body: html`<form class="form" data-form onsubmit="return false">
+    wide: true,
+    body: html`<form class="form" onsubmit="return false">
       <label class="field"><span>Template name</span><input class="input" type="text" maxlength="60" data-name value="${d.name}" placeholder="e.g. Gym opening order" required></label>
-      ${offerFields(d, 'template')}
+      <div class="form" data-offer-form></div>
       <label class="check"><input type="checkbox" data-default ${d.isDefault ? raw('checked') : ''}><span>Default template <span class="muted">(picked automatically when you give an offer)</span></span></label>
       ${d.id ? html`<p class="muted small" style="margin:0">Changing a template doesn't change offers already given. Customers keep what they were promised.</p>` : ''}
     </form>`,
     foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save template</button>`,
     onMount(api) {
-      wireOfferFields(api.el, d);
+      const form = mountOfferForm(api.$('[data-offer-form]'), d, 'template');
       api.$('[data-save]').addEventListener('click', (e) => {
         d.name = api.$('[data-name]').value.trim();
         d.isDefault = api.$('[data-default]').checked;
-        const problem = !d.name ? 'Give the template a name.' : readOfferFields(api.el, d, 'template');
+        const problem = !d.name ? 'Give the template a name.' : form.read();
         if (problem) { toast(problem, 'err'); return; }
-        const saved = { id: d.id || newTemplateId(), name: d.name, isDefault: d.isDefault, items: d.items, discountType: d.discountType, discountValue: d.discountValue, message: d.message, expiresInDays: d.expiresInDays, autoAdd: d.autoAdd };
+        const saved = {
+          id: d.id || newTemplateId(), name: d.name, isDefault: d.isDefault, items: d.items,
+          packPrice: d.packPrice, tradeTotal: d.tradeTotal, discountType: d.discountType, discountValue: d.discountValue,
+          message: d.message, expiresInDays: d.expiresInDays, autoAdd: d.autoAdd,
+        };
         let list = d.id ? state.templates.map((t) => (t.id === d.id ? saved : t)) : [...state.templates, saved];
         if (saved.isDefault) list = list.map((t) => ({ ...t, isDefault: t.id === saved.id }));
         else if (!list.some((t) => t.isDefault)) list[0] = { ...list[0], isDefault: true };
@@ -247,6 +338,7 @@ export function openGiveOffer({ customers = [], templateId = '', offer = null } 
   // Changing one customer's existing offer starts from that offer as given.
   let draft = offer ? { ...offer, items: offer.items.map((i) => ({ ...i })) } : offerFromTemplate(template);
   let choice = offer ? 'current' : template.id;
+  let form = null;
 
   openDrawer({
     eyebrow: 'Starter offer',
@@ -270,8 +362,8 @@ export function openGiveOffer({ customers = [], templateId = '', offer = null } 
     onMount(api) {
       const renderTemplates = () => {
         const options = [
-          ...(offer ? [{ id: 'current', label: 'Their current offer', sub: `${offerHeadline(offer)} · ${describeOffer(offer).split(' · ')[0]}` }] : []),
-          ...state.templates.map((t) => ({ id: t.id, label: t.name, sub: `${offerHeadline(t)} · ${(t.items || []).length} product${(t.items || []).length === 1 ? '' : 's'}${t.expiresInDays ? ` · ${t.expiresInDays} days` : ''}`, isDefault: t.isDefault })),
+          ...(offer ? [{ id: 'current', label: 'Their current offer', sub: describeOffer(offer) }] : []),
+          ...state.templates.map((t) => ({ id: t.id, label: t.name, sub: `${describeOffer(t)}${t.expiresInDays ? ` · lasts ${t.expiresInDays} days` : ''}`, isDefault: t.isDefault })),
         ];
         api.$('[data-templates]').innerHTML = String(html`${options.map((o) => html`
           <label class="list__item check" style="align-items:center">
@@ -285,19 +377,20 @@ export function openGiveOffer({ customers = [], templateId = '', offer = null } 
           renderFields();
         }));
       };
-      const renderFields = () => {
-        const box = api.$('[data-fields]');
-        box.innerHTML = String(offerFields(draft, 'offer'));
-        wireOfferFields(box, draft);
-      };
+      const renderFields = () => { form = mountOfferForm(api.$('[data-fields]'), draft, 'offer'); };
       const renderSelected = () => {
         const list = [...selected.values()];
         api.$('[data-selected]').innerHTML = list.length ? String(html`<div class="row row--wrap" style="gap:6px">${list.map((c) => html`
           <span class="badge" style="height:30px;padding:0 6px 0 12px;font-size:11px">${label(c)}${offer ? '' : html`<button class="btn btn--ghost btn--icon" style="width:22px;min-height:22px" type="button" data-unselect="${c.id}" aria-label="Remove ${label(c)}">${icon('x', 'i--sm')}</button>`}</span>`)}</div>`)
           : String(html`<p class="muted small" style="margin:0">Nobody chosen yet.</p>`);
         api.$$('[data-unselect]').forEach((b) => b.addEventListener('click', () => { selected.delete(b.dataset.unselect); renderSelected(); }));
-        const replacing = list.filter((c) => offerStatus(c) === 'Waiting').length;
-        api.$('[data-warning]').innerHTML = !offer && replacing ? String(html`<div class="notice notice--warn">${icon('circle-alert')}<div>${replacing} of them already ${replacing === 1 ? 'has' : 'have'} a waiting offer. Giving this replaces it.</div></div>`) : '';
+        const replacing = offer ? 0 : list.filter((c) => offerStatus(c) === 'Waiting').length;
+        // The pack price is set against trade prices; someone without the
+        // b2b tag sees retail prices, so the same % would leave them paying more.
+        const retail = list.filter((c) => !isDealer(c));
+        api.$('[data-warning]').innerHTML = String(html`
+          ${retail.length ? html`<div class="notice notice--warn">${icon('circle-alert')}<div>${retail.length === 1 ? `${label(retail[0])} isn't a trade account` : `${retail.length} of them aren't trade accounts`}, so they'd see retail prices and pay more than the pack price. Turn on Trade account on their customer page first.</div></div>` : ''}
+          ${replacing ? html`<div class="notice notice--warn" style="margin-top:8px">${icon('circle-alert')}<div>${replacing} of them already ${replacing === 1 ? 'has' : 'have'} a waiting offer. Giving this replaces it.</div></div>` : ''}`);
         api.$('[data-give-label]').textContent = list.length ? `${offer ? 'Save' : 'Give'} offer${list.length > 1 ? ` to ${list.length} customers` : ''}` : 'Give offer';
       };
       const search = api.$('[data-search]');
@@ -308,7 +401,7 @@ export function openGiveOffer({ customers = [], templateId = '', offer = null } 
           if (!q) { results.innerHTML = ''; return; }
           const found = [...state.customers.values()].filter((c) => !selected.has(c.id) && `${c.name} ${c.email} ${c.company}`.toLowerCase().includes(q)).slice(0, 8);
           results.innerHTML = String(found.length ? html`<div class="list">${found.map((c) => html`
-            <div class="list__item"><span class="list__main"><span class="strong clip">${label(c)}</span><span class="muted small clip">${[sublabel(c), c.email].filter(Boolean).join(' · ')}${offerStatus(c) === 'Waiting' ? ' · has a waiting offer' : ''}</span></span>
+            <div class="list__item"><span class="list__main"><span class="strong clip">${label(c)}${isDealer(c) ? html` <span class="badge badge--ink" style="margin-left:4px">Trade</span>` : ''}</span><span class="muted small clip">${[sublabel(c), c.email].filter(Boolean).join(' · ')}${offerStatus(c) === 'Waiting' ? ' · has a waiting offer' : ''}</span></span>
             <button class="btn btn--outline btn--sm" type="button" data-add="${c.id}">${icon('plus', 'i--sm')}Add</button></div>`)}</div>` : html`<p class="muted small">No matches.</p>`);
           results.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => { selected.set(b.dataset.add, state.customers.get(b.dataset.add)); search.value = ''; results.innerHTML = ''; search.focus(); renderSelected(); }));
         });
@@ -321,7 +414,7 @@ export function openGiveOffer({ customers = [], templateId = '', offer = null } 
       }
       api.$('[data-give]').addEventListener('click', (e) => {
         // Read the customise fields even while collapsed -- they hold the draft.
-        const problem = readOfferFields(api.$('[data-fields]'), draft, 'offer');
+        const problem = form.read();
         if (problem) { api.$('[data-customise]').open = true; toast(problem, 'err'); return; }
         if (!selected.size) { toast('Choose at least one customer', 'err'); return; }
         const list = [...selected.values()];

@@ -14,7 +14,7 @@ import * as setup from './views/setup.js';
 const NAV = [
   { key: 'dashboard', href: '#/', label: 'Dashboard', icon: 'layout-dashboard' },
   { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
-  { key: 'orders', href: '#/orders', label: 'Orders', icon: 'receipt' },
+  { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
   { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
   { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
   { key: 'setup', href: '#/setup', label: 'Setup', icon: 'settings' },

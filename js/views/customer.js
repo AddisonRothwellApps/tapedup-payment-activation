@@ -97,7 +97,8 @@ export function render(el, numericId) {
             <div class="card__head"><h2 class="h2">Starter offer</h2>${offerState ? offerStatusChip(offerState) : ''}</div>
             ${c.offer ? html`
               <div class="offer">
-                <div class="offer__off">${offerHeadline(c.offer)}</div>
+                <div><div class="offer__off">${offerHeadline(c.offer)}</div>
+                  ${c.offer.packPrice && c.offer.tradeTotal ? html`<div class="muted small">Trade price ${money(c.offer.tradeTotal)} · ${Math.round(Number(c.offer.discountValue) * 10) / 10}% off their order</div>` : ''}</div>
                 <ul class="offer__items">${(c.offer.items || []).map((i) => html`<li><b>${i.quantity} ×</b> ${i.title}</li>`)}</ul>
                 <div class="muted small">${c.offer.templateName || 'Custom offer'} · given ${c.offer.assignedAt ? ago(c.offer.assignedAt) : ''}${c.offer.expiresOn ? ` · until ${fmtDate(c.offer.expiresOn)}` : ''}</div>
               </div>

@@ -259,6 +259,14 @@ button { font: inherit; }
 .offer__items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--text-xs); }
 .offer__items li { display: flex; gap: 8px; align-items: center; }
 .thumb { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; background: var(--tu-chalk-100); flex: none; border: 1px solid var(--border-subtle); }
+/* Pack pricing block in the offer form: trade total, the one price you set, and the worked-out % */
+.pack { display: grid; gap: 12px; padding: 16px; border: 2px solid var(--brand-ink); border-radius: var(--radius-card); background: var(--surface-subtle); }
+.pack__totals { display: flex; gap: 28px; flex-wrap: wrap; }
+.pack__totals > div { display: grid; gap: 4px; }
+.pack__trade { font: var(--weight-bold) var(--text-lg)/1.1 var(--font-body); color: var(--text-strong); }
+.pack__calc { margin: 0; font-size: var(--text-xs); color: var(--text-body); line-height: 1.5; }
+.pack__calc strong { color: var(--text-strong); }
+.pack__calc--err { color: var(--state-danger-text); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 
 /* ---- Notices ---- */
