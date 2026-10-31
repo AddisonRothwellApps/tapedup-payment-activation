@@ -24,6 +24,27 @@
     .field-block .input-row { display: flex; align-items: center; gap: 4px; }
     .field-block span.prefix { color: #888; font-size: 15px; }
     .field-block input[type="number"] { border: 0; font-size: 18px; width: 100%; outline: none; font-family: inherit; }
+    .field-block select, .field-block input[type="date"], .field-block input[type="text"] { border: 0; font-size: 16px; width: 100%; outline: none; font-family: inherit; background: none; padding: 0; }
+    h3 { font-size: 14px; margin: 20px 0 6px; }
+    .muted { color: #777; font-size: 13px; }
+    button.secondary { background: #fff; color: #1a1a1a; border: 1px solid #ccc; }
+    button.small { font-size: 13px; padding: 6px 12px; }
+    button.danger { color: #a11; border-color: #e5b3b3; }
+    input.text { font: inherit; font-size: 15px; padding: 9px 12px; border: 1px solid #ccc; border-radius: 8px; flex: 1; min-width: 0; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #eee; }
+    .grow { flex: 1; min-width: 0; }
+    .grow > * { display: block; overflow: hidden; text-overflow: ellipsis; }
+    .pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .pill.Waiting { background: #eef2ff; color: #33329b; }
+    .pill.Used { background: #e6f6ec; color: #0a5c2e; }
+    .pill.Expired { background: #f4f4f4; color: #666; }
+    .thumb { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: #f4f4f4; flex: none; }
+    .qty { width: 64px; font: inherit; font-size: 15px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; }
+    .editor { border-top: 2px solid #1a1a1a; margin-top: 20px; padding-top: 4px; }
+    .search-row { display: flex; gap: 8px; }
+    .picked { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid #e2e2e2; border-radius: 10px; }
+    .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 8px 0; line-height: 1.5; }
+    .editor-actions { display: flex; gap: 8px; margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -72,6 +93,23 @@
     <p>Change the threshold and flat rate here — saved straight into the discount above, no redeploy needed. (Requires that discount to exist first — activate the panel above once, then this one can find it.)</p>
     <div id="status-b2b-ship-settings" class="status info">Loading…</div>
     <div id="form-b2b-ship-settings"></div>
+  </section>
+
+  <section>
+    <h2>Starter order discount</h2>
+    <p>Takes each customer's starter-order discount off their whole order at checkout. You set who gets what in the panel below. Stacks on top of B2B trade pricing and shipping.</p>
+    <div id="status-starter-discount" class="status info">Loading…</div>
+    <div id="actions-starter-discount"></div>
+    <pre id="detail-starter-discount" style="display:none"></pre>
+  </section>
+
+  <section>
+    <h2>Starter orders</h2>
+    <p>Give a specific customer a one-time starter order. The products you pick go into their cart automatically the next time they visit the site logged in, a banner shows the offer until they order, and the discount comes off their whole order at checkout. It switches itself off once they've placed their next order.</p>
+    <p class="muted">They need to be logged in to their account for the site and checkout to recognise them.</p>
+    <div id="status-starter" class="status info">Loading…</div>
+    <div id="starter-list"></div>
+    <div id="starter-editor"></div>
   </section>
 
   <script>
@@ -337,10 +375,12 @@
       }
     }
 
-    // ---- Shared: discountAutomaticAppCreate-based panel (used for both
-    // B2B trade pricing and B2B trade shipping -- same discount mutation
-    // family, just a different function/title). ----
-    async function runDiscountPanel(prefix, functionTitle, discountTitle, combinesWith) {
+    // ---- Shared: discountAutomaticAppCreate-based panel (used for B2B
+    // trade pricing, B2B trade shipping and Starter order -- same discount
+    // mutation family, just a different function/title). discountClasses is
+    // only passed for functions on the newer Discount Function API (Starter
+    // order); the older-API ones get their class from their target. ----
+    async function runDiscountPanel(prefix, functionTitle, discountTitle, combinesWith, discountClasses) {
       const { setStatus, showDetail, actionsEl } = ui(prefix);
       try {
         setStatus('info', 'Looking up the function…');
@@ -412,6 +452,7 @@
                   functionId: fn.id,
                   startsAt: new Date().toISOString(),
                   combinesWith,
+                  ...(discountClasses ? { discountClasses } : {}),
                 },
               });
               if (result.discountAutomaticAppCreate.userErrors.length) throw new Error(JSON.stringify(result.discountAutomaticAppCreate.userErrors));
@@ -521,6 +562,377 @@
       }
     }
 
+    // ---- Starter orders: one-time offers given to specific customers. Each
+    // is JSON on the customer (metafield tapedup.starter_offer), read by both
+    // the starter-order-discount function (takes the money off at checkout)
+    // and the theme's snippets/starter-offer.liquid (banner + auto-add) --
+    // keep this shape in step with both. ordersAtAssignment is the
+    // customer's order count when the offer was saved; once they go past it
+    // the offer is spent. Customers with an offer are also tagged
+    // "starter-order", only so this panel can list them (and you can filter
+    // by it in Shopify admin). ----
+    const STARTER_NAMESPACE = 'tapedup';
+    const STARTER_KEY = 'starter_offer';
+    const STARTER_TAG = 'starter-order';
+    const STARTER_DEFAULT_MESSAGE = 'Welcome to TapedUp! Your starter order is ready.';
+    const STARTER_CUSTOMER_FIELDS = `id displayName email numberOfOrders metafield(namespace: "${STARTER_NAMESPACE}", key: "${STARTER_KEY}") { value }`;
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function thumbUrl(src) {
+      return src ? src + (src.includes('?') ? '&' : '?') + 'width=80' : '';
+    }
+
+    function toStarterCustomer(node) {
+      let offer = null;
+      try {
+        const parsed = node.metafield?.value ? JSON.parse(node.metafield.value) : null;
+        if (parsed && typeof parsed === 'object') offer = parsed;
+      } catch (err) { /* malformed -- treat as no offer */ }
+      return { id: node.id, displayName: node.displayName, email: node.email, numberOfOrders: Number(node.numberOfOrders) || 0, offer };
+    }
+
+    function customerLabel(c) {
+      // displayName/email come back blank if the app hasn't been given
+      // protected customer data access -- fall back to the numeric ID.
+      return c.displayName || c.email || 'Customer ' + c.id.split('/').pop();
+    }
+
+    function localToday() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    // Same rules as the function and the theme snippet.
+    function starterStatus(numberOfOrders, offer) {
+      if (numberOfOrders > Number(offer.ordersAtAssignment ?? 0)) return 'Used';
+      if (offer.expiresOn && localToday() > offer.expiresOn) return 'Expired';
+      return 'Waiting';
+    }
+
+    function describeStarterOffer(offer) {
+      const units = (offer.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      const off = offer.discountType === 'fixedAmount' ? `£${Number(offer.discountValue).toFixed(2)} off` : `${offer.discountValue}% off`;
+      return `${units} item${units === 1 ? '' : 's'} · ${off} the whole order${offer.expiresOn ? ` · until ${offer.expiresOn}` : ''}`;
+    }
+
+    async function runStarterOrdersPanel() {
+      const statusEl = document.getElementById('status-starter');
+      const listEl = document.getElementById('starter-list');
+      const editorEl = document.getElementById('starter-editor');
+      const setStatus = (kind, text) => { statusEl.className = 'status ' + kind; statusEl.textContent = (kind === 'ok' ? '✓ ' : kind === 'err' ? '✗ ' : '') + text; };
+      let customers = [];
+
+      function renderList() {
+        listEl.innerHTML = `
+          <h3>Customers with a starter order</h3>
+          ${customers.length ? customers.map((c, i) => {
+            const status = starterStatus(c.numberOfOrders, c.offer);
+            return `
+              <div class="row">
+                <div class="grow">
+                  <strong>${esc(customerLabel(c))}</strong>
+                  ${c.email && c.displayName ? `<span class="muted">${esc(c.email)}</span>` : ''}
+                  <span class="muted">${esc(describeStarterOffer(c.offer))}</span>
+                </div>
+                <span class="pill ${status}">${status}</span>
+                <button class="secondary small" data-edit="${i}">Edit</button>
+                <button class="secondary small danger" data-remove="${i}">Remove</button>
+              </div>`;
+          }).join('') : '<p class="muted">Nobody has one yet.</p>'}
+          <button data-new style="margin-top:12px">Give a customer a starter order</button>
+        `;
+        listEl.querySelector('[data-new]').onclick = () => openEditor(null);
+        listEl.querySelectorAll('[data-edit]').forEach((btn) => { btn.onclick = () => openEditor(customers[Number(btn.dataset.edit)]); });
+        listEl.querySelectorAll('[data-remove]').forEach((btn) => {
+          // Two clicks rather than confirm(), which embedded admin frames can block.
+          btn.onclick = () => {
+            if (btn.dataset.armed) { removeOffer(customers[Number(btn.dataset.remove)], btn); return; }
+            btn.dataset.armed = '1';
+            btn.textContent = 'Click again to remove';
+            setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Remove'; } }, 4000);
+          };
+        });
+      }
+
+      async function removeOffer(customer, btn) {
+        btn.disabled = true;
+        try {
+          setStatus('info', 'Removing…');
+          const result = await adminFetch(`
+            mutation Remove($metafields: [MetafieldIdentifierInput!]!, $id: ID!, $tags: [String!]!) {
+              metafieldsDelete(metafields: $metafields) { userErrors { field message } }
+              tagsRemove(id: $id, tags: $tags) { userErrors { field message } }
+            }
+          `, {
+            metafields: [{ ownerId: customer.id, namespace: STARTER_NAMESPACE, key: STARTER_KEY }],
+            id: customer.id,
+            tags: [STARTER_TAG],
+          });
+          const errors = [...result.metafieldsDelete.userErrors, ...result.tagsRemove.userErrors];
+          if (errors.length) throw new Error(JSON.stringify(errors));
+          customers = customers.filter((c) => c.id !== customer.id);
+          renderList();
+          editorEl.innerHTML = '';
+          setStatus('ok', `Removed ${customerLabel(customer)}'s starter order.`);
+        } catch (err) {
+          setStatus('err', 'Failed: ' + err.message);
+          btn.disabled = false;
+        }
+      }
+
+      function openEditor(existing) {
+        let customer = existing;
+        const fromOffer = (offer) => offer
+          ? { ...offer, items: (offer.items || []).map((item) => ({ ...item })) }
+          : { items: [], discountType: 'percentage', discountValue: 10, message: STARTER_DEFAULT_MESSAGE, expiresOn: '', autoAdd: true };
+        const draft = fromOffer(existing?.offer);
+
+        editorEl.innerHTML = `
+          <div class="editor">
+            <h3>Customer</h3>
+            <div id="starter-customer"></div>
+            <h3>Products</h3>
+            <div id="starter-items"></div>
+            <button class="secondary small" data-pick style="margin-top:10px">Choose products</button>
+            <div class="field-row">
+              <div class="field-block">
+                <label for="starter-type">Discount</label>
+                <select id="starter-type">
+                  <option value="percentage">% off the whole order</option>
+                  <option value="fixedAmount">£ off the whole order</option>
+                </select>
+              </div>
+              <div class="field-block">
+                <label for="starter-value">Amount</label>
+                <div class="input-row"><span class="prefix" id="starter-prefix"></span><input id="starter-value" type="number" min="0" step="0.01"><span class="prefix" id="starter-suffix"></span></div>
+              </div>
+              <div class="field-block">
+                <label for="starter-expires">Expires (optional)</label>
+                <input id="starter-expires" type="date">
+              </div>
+            </div>
+            <div class="field-block">
+              <label for="starter-message">Message on the site</label>
+              <input id="starter-message" type="text" maxlength="120">
+            </div>
+            <label class="check"><input id="starter-autoadd" type="checkbox"> Put the products in their cart automatically on their next visit (otherwise the banner just offers them)</label>
+            <div class="editor-actions">
+              <button data-save>Save starter order</button>
+              <button class="secondary" data-cancel>Cancel</button>
+            </div>
+          </div>
+        `;
+        const $ = (sel) => editorEl.querySelector(sel);
+        $('#starter-type').value = draft.discountType === 'fixedAmount' ? 'fixedAmount' : 'percentage';
+        $('#starter-value').value = draft.discountValue;
+        $('#starter-expires').value = draft.expiresOn || '';
+        $('#starter-message').value = draft.message || '';
+        $('#starter-autoadd').checked = draft.autoAdd !== false;
+        const syncUnit = () => {
+          const fixed = $('#starter-type').value === 'fixedAmount';
+          $('#starter-prefix').textContent = fixed ? '£' : '';
+          $('#starter-suffix').textContent = fixed ? '' : '%';
+        };
+        $('#starter-type').onchange = syncUnit;
+        syncUnit();
+        $('[data-pick]').onclick = pickProducts;
+        $('[data-cancel]').onclick = () => { editorEl.innerHTML = ''; };
+        $('[data-save]').onclick = (event) => save(event.currentTarget);
+        renderCustomer();
+        renderItems();
+        editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        function renderCustomer() {
+          const el = $('#starter-customer');
+          if (customer) {
+            el.innerHTML = `
+              <div class="picked">
+                <div class="grow">
+                  <strong>${esc(customerLabel(customer))}</strong>
+                  <span class="muted">${esc(customer.email || '')} · ${customer.numberOfOrders} order${customer.numberOfOrders === 1 ? '' : 's'} so far</span>
+                </div>
+                ${existing ? '' : '<button class="secondary small" data-change>Change</button>'}
+              </div>
+              ${!existing && customer.offer ? '<p class="muted">They already have a starter order. Saving replaces it.</p>' : ''}
+            `;
+            const change = el.querySelector('[data-change]');
+            if (change) change.onclick = () => { customer = null; renderCustomer(); };
+            return;
+          }
+          el.innerHTML = `
+            <div class="search-row">
+              <input class="text" id="starter-search" type="search" placeholder="Search by name or email">
+              <button class="secondary small" data-search>Search</button>
+            </div>
+            <div id="starter-results"></div>
+          `;
+          const input = el.querySelector('#starter-search');
+          const search = async () => {
+            const results = el.querySelector('#starter-results');
+            const term = input.value.trim();
+            if (!term) return;
+            results.innerHTML = '<p class="muted">Searching…</p>';
+            try {
+              const data = await adminFetch(`query($q: String!) { customers(first: 10, query: $q) { nodes { ${STARTER_CUSTOMER_FIELDS} } } }`, { q: term });
+              const found = data.customers.nodes.map(toStarterCustomer);
+              results.innerHTML = found.length ? found.map((c, i) => `
+                <div class="row">
+                  <div class="grow">
+                    <strong>${esc(customerLabel(c))}</strong>
+                    <span class="muted">${esc(c.email || '')} · ${c.numberOfOrders} order${c.numberOfOrders === 1 ? '' : 's'}${c.offer ? ' · already has a starter order' : ''}</span>
+                  </div>
+                  <button class="secondary small" data-choose="${i}">Choose</button>
+                </div>
+              `).join('') : '<p class="muted">No customers match. Create them in Shopify admin (Customers → Add customer) first.</p>';
+              results.querySelectorAll('[data-choose]').forEach((btn) => {
+                btn.onclick = () => { customer = found[Number(btn.dataset.choose)]; renderCustomer(); };
+              });
+            } catch (err) {
+              results.innerHTML = `<p class="status err">✗ Search failed: ${esc(err.message)}</p>`;
+            }
+          };
+          el.querySelector('[data-search]').onclick = search;
+          input.onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); search(); } };
+          input.focus();
+        }
+
+        function renderItems() {
+          const el = $('#starter-items');
+          if (!draft.items.length) {
+            el.innerHTML = '<p class="muted">No products yet.</p>';
+            return;
+          }
+          el.innerHTML = draft.items.map((item, i) => `
+            <div class="row">
+              ${item.image ? `<img class="thumb" src="${esc(thumbUrl(item.image))}" alt="">` : '<span class="thumb"></span>'}
+              <span class="grow">${esc(item.title)}</span>
+              <input class="qty" type="number" min="1" step="1" value="${Number(item.quantity) || 1}" data-qty="${i}" aria-label="Quantity">
+              <button class="secondary small" data-drop="${i}" aria-label="Remove ${esc(item.title)}">✕</button>
+            </div>
+          `).join('');
+          el.querySelectorAll('[data-qty]').forEach((input) => {
+            input.oninput = () => { draft.items[Number(input.dataset.qty)].quantity = Number(input.value); };
+          });
+          el.querySelectorAll('[data-drop]').forEach((btn) => {
+            btn.onclick = () => { draft.items.splice(Number(btn.dataset.drop), 1); renderItems(); };
+          });
+        }
+
+        async function pickProducts() {
+          // Pre-select what's already chosen, grouped by product the way the
+          // picker expects, so re-opening it adds to / trims the list rather
+          // than starting over. Quantities survive for variants that stay.
+          const byProduct = new Map();
+          draft.items.forEach((item) => {
+            if (!item.productId) return;
+            if (!byProduct.has(item.productId)) byProduct.set(item.productId, []);
+            byProduct.get(item.productId).push({ id: item.variantId });
+          });
+          const selection = await shopify.resourcePicker({
+            type: 'product',
+            action: 'select',
+            multiple: true,
+            filter: { variants: true, draft: false, archived: false },
+            selectionIds: [...byProduct].map(([id, variants]) => ({ id, variants })),
+          });
+          if (!selection) return; // cancelled
+          const previousQty = new Map(draft.items.map((item) => [item.variantId, item.quantity]));
+          draft.items = selection.flatMap((product) => (product.variants || []).filter((v) => v.id).map((variant) => ({
+            productId: product.id,
+            variantId: variant.id,
+            title: variant.title && variant.title !== 'Default Title' ? `${product.title} – ${variant.title}` : product.title,
+            image: variant.image?.originalSrc || product.images?.[0]?.originalSrc || '',
+            quantity: previousQty.get(variant.id) || 1,
+          })));
+          renderItems();
+        }
+
+        async function save(btn) {
+          draft.discountType = $('#starter-type').value;
+          draft.discountValue = Number($('#starter-value').value);
+          draft.expiresOn = $('#starter-expires').value;
+          draft.message = $('#starter-message').value.trim();
+          draft.autoAdd = $('#starter-autoadd').checked;
+
+          const problem =
+            !customer ? 'Choose a customer first.'
+            : !draft.items.length ? 'Choose at least one product.'
+            : draft.items.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1) ? 'Every product needs a whole-number quantity of at least 1.'
+            : !(draft.discountValue > 0) ? 'Enter a discount amount above 0.'
+            : draft.discountType === 'percentage' && draft.discountValue > 100 ? 'A percentage discount can\'t be over 100.'
+            : draft.expiresOn && draft.expiresOn < localToday() ? 'The expiry date is in the past.'
+            : null;
+          if (problem) { setStatus('err', problem); return; }
+
+          btn.disabled = true;
+          try {
+            setStatus('info', 'Saving…');
+            // Fresh order count, not the one from when the customer was
+            // searched -- this is the number the offer is spent against.
+            const fresh = await adminFetch(`query($id: ID!) { customer(id: $id) { numberOfOrders } }`, { id: customer.id });
+            const numberOfOrders = Number(fresh.customer.numberOfOrders) || 0;
+
+            // assignedAt keys the theme's once-only auto-add. Keep it when
+            // only the discount/message changed on an offer that's still
+            // waiting (no second auto-add of the same products); anything
+            // else counts as a new offer, which auto-adds once more.
+            const previous = customer.offer;
+            const itemsKey = (items) => JSON.stringify((items || []).map((item) => [item.variantId, Number(item.quantity)]));
+            const keepKey = previous && previous.assignedAt && itemsKey(previous.items) === itemsKey(draft.items)
+              && starterStatus(numberOfOrders, previous) === 'Waiting';
+
+            const offer = {
+              items: draft.items.map(({ productId, variantId, title, image, quantity }) => ({ productId, variantId, title, image, quantity })),
+              discountType: draft.discountType,
+              discountValue: draft.discountValue,
+              message: draft.message,
+              expiresOn: draft.expiresOn,
+              autoAdd: draft.autoAdd,
+              ordersAtAssignment: numberOfOrders,
+              assignedAt: keepKey ? previous.assignedAt : new Date().toISOString(),
+            };
+
+            const result = await adminFetch(`
+              mutation Save($metafields: [MetafieldsSetInput!]!, $id: ID!, $tags: [String!]!) {
+                metafieldsSet(metafields: $metafields) { userErrors { field message } }
+                tagsAdd(id: $id, tags: $tags) { userErrors { field message } }
+              }
+            `, {
+              metafields: [{ ownerId: customer.id, namespace: STARTER_NAMESPACE, key: STARTER_KEY, type: 'json', value: JSON.stringify(offer) }],
+              id: customer.id,
+              tags: [STARTER_TAG],
+            });
+            const errors = [...result.metafieldsSet.userErrors, ...result.tagsAdd.userErrors];
+            if (errors.length) throw new Error(JSON.stringify(errors));
+
+            // Update the list in place -- customer search can take a few
+            // seconds to pick up the new tag, so re-querying now could miss it.
+            const saved = { ...customer, numberOfOrders, offer };
+            customers = [saved, ...customers.filter((c) => c.id !== saved.id)];
+            renderList();
+            editorEl.innerHTML = '';
+            setStatus('ok', `Saved. ${customerLabel(saved)} gets ${describeStarterOffer(offer)} on their next order.`);
+          } catch (err) {
+            setStatus('err', 'Failed: ' + err.message);
+            btn.disabled = false;
+          }
+        }
+      }
+
+      try {
+        setStatus('info', 'Loading customers with a starter order…');
+        const data = await adminFetch(`query($q: String!) { customers(first: 100, query: $q, sortKey: UPDATED_AT, reverse: true) { nodes { ${STARTER_CUSTOMER_FIELDS} } } }`, { q: `tag:"${STARTER_TAG}"` });
+        customers = data.customers.nodes.map(toStarterCustomer).filter((c) => c.offer);
+        renderList();
+        setStatus('ok', customers.length ? `${customers.length} customer${customers.length === 1 ? '' : 's'} with a starter order.` : 'Ready.');
+      } catch (err) {
+        setStatus('err', 'Something went wrong: ' + err.message + ' (If this mentions access or scopes, the app needs redeploying with customer access and re-approving in Shopify admin.)');
+      }
+    }
+
     runPaymentPanel();
     // A discount can't combine with another discount of its OWN class --
     // Shopify rejects the create with a "not supported with these
@@ -532,6 +944,10 @@
     runDeliveryVisibilityPanel();
     runDiscountPanel('b2b-ship-price', 'B2B trade shipping', 'B2B trade shipping', { orderDiscounts: true, productDiscounts: true, shippingDiscounts: false });
     runShippingSettingsPanel();
+    // Order-class, so (per the rule above) it leaves orderDiscounts out and
+    // stacks with product discounts (B2B trade pricing) and shipping ones.
+    runDiscountPanel('starter-discount', 'Starter order', 'Starter order', { orderDiscounts: false, productDiscounts: true, shippingDiscounts: true }, ['ORDER']);
+    runStarterOrdersPanel();
   </script>
 </body>
 </html>
