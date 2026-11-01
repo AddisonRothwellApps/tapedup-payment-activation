@@ -59,6 +59,12 @@ client secret anywhere in this repo.
   at trade.tapedup.co.uk the editor previews the real email for any dealer
   and sends you a test. `js/email-templates.js` holds the starting set,
   written in the storefront's voice.
+- **Agent** `#/agent` (trade.tapedup.co.uk) — whether the agent is reading
+  replies and allowed to send, AI spend against the monthly limit, the last
+  follow-up run (and "Run follow-ups now"), results per email template
+  (sent, replied, opted out, samples and accounts after), and what the agent
+  may say: product facts, reply tone and whether simple replies may send
+  without approval (saved with the templates as `set.agent`).
 - **Customers** `#/customers` and `#/customers/<id>` — the trade-account list
   (search, filters, sort incl. longest since contact, CSV export, bulk "give
   starter offer", add trade account) and each one's page: stats, spend by

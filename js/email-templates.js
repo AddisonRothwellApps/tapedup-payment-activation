@@ -139,6 +139,15 @@ And if something put you off, I'd genuinely like to know.`,
   ],
 };
 
+// What the agent may say about TapedUp when it drafts replies. Kept with the
+// templates (set.agent) and edited on the Agent screen. Mirrors the trade
+// server's default.
+export const DEFAULT_FACTS = `TapedUp makes customised zinc oxide climbing tape: medical grade, 100% cotton, latex free, printed with designs (not plain white).
+We offer gyms and climbing shops a free sample pack, delivered free. We need a delivery address to send it.
+Trade accounts: gyms and shops get trade pricing on every design. Dealers order at tapedup.co.uk, signing in with their email address (one-time code, no password). Card payment at checkout; payment on terms only by agreement with Addison.
+A starter offer can be added to a new trade account for their first order.
+Website: tapedup.co.uk. Based in the UK, we ship UK-wide.`;
+
 export const emailState = { set: null, saved: false, loaded: false };
 
 export async function loadEmailTemplates() {
