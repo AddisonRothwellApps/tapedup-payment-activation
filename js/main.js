@@ -3,7 +3,9 @@
 // a real path like /customers would 404 there.
 import { state, subscribe, loadBoot, loadCustomers, loadCachedOrders, syncOrders, followUps, todayISO, hasAllOrders } from './store.js';
 import { html, icon, ago, loadingBlock } from './ui.js';
+import { EMBEDDED } from './env.js';
 import * as dashboard from './views/dashboard.js';
+import * as pipeline from './views/pipeline.js';
 import * as customers from './views/customers.js';
 import * as customer from './views/customer.js';
 import * as orders from './views/orders.js';
@@ -14,6 +16,7 @@ import * as importer from './views/import.js';
 
 const NAV = [
   { key: 'dashboard', href: '#/', label: 'Dashboard', icon: 'layout-dashboard' },
+  { key: 'pipeline', href: '#/pipeline', label: 'Pipeline', icon: 'square-kanban' },
   { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
   { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
   { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
@@ -23,6 +26,7 @@ const NAV = [
 
 const ROUTES = [
   { nav: 'dashboard', re: /^\/?$/, view: dashboard },
+  { nav: 'pipeline', re: /^\/pipeline$/, view: pipeline },
   { nav: 'customers', re: /^\/customers$/, view: customers },
   { nav: 'customers', re: /^\/customers\/(\d+)$/, view: customer },
   { nav: 'orders', re: /^\/orders$/, view: orders },
@@ -39,13 +43,14 @@ const syncEl = document.getElementById('sync-status');
 let current = null;
 let booted = false;
 let bootError = null;
-let loadingText = 'Connecting to Shopify…';
+let loadingText = EMBEDDED ? 'Connecting to Shopify…' : 'Connecting to Shopify through trade.tapedup.co.uk…';
 
 function renderNav() {
   const today = todayISO();
   const due = state.customersLoaded ? followUps().filter((f) => f.entry.followUp <= today).length : 0;
   nav.innerHTML = String(html`${NAV.map((n) => html`
-    <a href="${n.href}" ${current && current.nav === n.key ? html`aria-current="page"` : ''}>${icon(n.icon)}<span>${n.label}</span>${n.key === 'follow-ups' && due ? html`<span class="nav__count" title="${due} due or overdue">${due}</span>` : ''}</a>`)}`);
+    <a href="${n.href}" ${current && current.nav === n.key ? html`aria-current="page"` : ''}>${icon(n.icon)}<span>${n.label}</span>${n.key === 'follow-ups' && due ? html`<span class="nav__count" title="${due} due or overdue">${due}</span>` : ''}</a>`)}
+    ${EMBEDDED ? '' : html`<form method="post" action="/auth/logout" class="nav__signout"><button class="btn btn--ghost btn--sm" type="submit">${icon('log-out', 'i--sm')}Sign out</button></form>`}`);
 }
 
 function renderSync() {

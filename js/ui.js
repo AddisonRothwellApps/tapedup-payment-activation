@@ -247,6 +247,9 @@ export function statusChip(key, STATUS) {
 export const loadingBlock = (text, progress) => html`<div class="loading"><div class="spinner" aria-hidden="true"></div><div>${text}</div>${progress != null ? html`<div class="muted small">${progress}</div>` : ''}</div>`;
 
 export function adminUrl(path) {
-  // App Bridge turns shopify://admin links (target _top) into Shopify admin navigation.
-  return `shopify://admin/${path}`;
+  // Embedded: App Bridge turns shopify://admin links (target _top) into admin navigation.
+  // Standalone: a normal link to the store's admin.
+  if (window.self !== window.top) return `shopify://admin/${path}`;
+  const handle = String(window.tradeHubShop || '').replace(/\.myshopify\.com$/, '');
+  return handle ? `https://admin.shopify.com/store/${handle}/${path}` : `https://admin.shopify.com/${path}`;
 }

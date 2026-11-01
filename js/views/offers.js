@@ -7,6 +7,7 @@ import {
   giveOffer, removeOffer, isDealer, todayISO, label, sublabel, tradePrices, round2,
 } from '../store.js';
 import { html, raw, icon, money, fmtDate, ago, toast, openDrawer, busy, armed } from '../ui.js';
+import { EMBEDDED } from '../env.js';
 
 const ui = { show: 'Waiting' };
 const BLANK_TEMPLATE = () => ({ id: '', name: '', isDefault: false, items: [], packPrice: '', message: 'Welcome to TapedUp! Your starter order is ready.', expiresInDays: 30, autoAdd: true });
@@ -232,6 +233,8 @@ function mountOfferForm(box, d, mode) {
 
   packInput.addEventListener('input', calc);
   $('[data-pick]').addEventListener('click', async () => {
+    // Shopify's product picker is part of App Bridge, which only exists inside admin.
+    if (!EMBEDDED) { toast('The product picker only opens inside Shopify admin. Pick products there; everything else works here.', 'err'); return; }
     // Pre-select what's chosen (grouped by product, as the picker expects)
     // so re-opening it adds to or trims the list; quantities survive.
     const byProduct = new Map();

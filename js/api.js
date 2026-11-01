@@ -1,11 +1,14 @@
-// Admin GraphQL over App Bridge direct API access: fetch('shopify:admin/...')
-// is authenticated by the embedded session, so there's no server or secret.
-// This wrapper adds the two things a CRM-sized workload needs that the old
-// one-shot setup page didn't: pacing against Shopify's query-cost bucket
-// (wait instead of failing when it runs low) and a clear error for
-// userErrors on mutations.
+// Admin GraphQL, from either place Trade Hub runs (see env.js):
+//   embedded:   App Bridge direct API access, fetch('shopify:admin/...'),
+//               authenticated by the embedded session.
+//   standalone: the trade server's /api/shopify/graphql, authenticated by
+//               the Microsoft 365 sign-in cookie; the server adds the token.
+// Either way the response is Shopify's own, so the rest is shared: pacing
+// against Shopify's query-cost bucket (wait instead of failing when it runs
+// low) and a clear error for userErrors on mutations.
+import { EMBEDDED } from './env.js';
 
-const ENDPOINT = 'shopify:admin/api/graphql.json';
+const ENDPOINT = EMBEDDED ? 'shopify:admin/api/graphql.json' : '/api/shopify/graphql';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class ApiError extends Error {
@@ -16,8 +19,18 @@ let lastThrottle = null; // { currentlyAvailable, restoreRate } from the previou
 
 export async function gql(query, variables) {
   for (let attempt = 0; attempt < 8; attempt++) {
-    const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ query, variables }) });
+    const res = await fetch(ENDPOINT, EMBEDDED
+      ? { method: 'POST', body: JSON.stringify({ query, variables }) }
+      : { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ query, variables }) });
+    if (!EMBEDDED && res.status === 401) {
+      // Signed out (or the session expired): back through Microsoft sign-in.
+      location.href = `/auth/login?next=${encodeURIComponent(location.pathname + location.hash)}`;
+      throw new ApiError('Signed out', 'SIGNED_OUT');
+    }
     const json = await res.json();
+    if (!EMBEDDED && res.status === 503) {
+      throw new ApiError('Shopify isn\'t connected to trade.tapedup.co.uk yet. Open Trade Hub inside Shopify admin, go to Setup and press "Connect trade.tapedup.co.uk".', 'NOT_LINKED');
+    }
     const cost = json.extensions && json.extensions.cost;
     if (cost && cost.throttleStatus) lastThrottle = cost.throttleStatus;
 

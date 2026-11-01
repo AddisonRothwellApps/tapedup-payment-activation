@@ -1,6 +1,6 @@
 // Customers: the CRM list of trade accounts. Search, quick filters, sorting,
 // bulk "give a starter offer", CSV export, and adding a new trade account.
-import { state, insights, isTerms, label, sublabel, shortTape, offerStatus, followUps, lastContact, STATUS, todayISO, createCustomer } from '../store.js';
+import { state, insights, isTerms, label, sublabel, shortTape, offerStatus, followUps, lastContact, STATUS, todayISO, createCustomer, stageOf } from '../store.js';
 import { html, raw, icon, money0, ago, trendBadge, statusChip, toast, openDrawer, busy } from '../ui.js';
 import { openGiveOffer } from './offers.js';
 
@@ -144,7 +144,7 @@ function exportCsv(list) {
   const lines = [cols.map(cell).join(',')];
   for (const { c, s } of list) {
     lines.push([label(c), c.contact, c.name, c.email, c.phone, c.city, STATUS[s.status].label, c.amountSpent.toFixed(2), c.numberOfOrders,
-      s.lastAt ? s.lastAt.slice(0, 10) : '', lastContact(c) || '', s.trend ? s.trend.cur.toFixed(2) : '', s.trend ? s.trend.prev.toFixed(2) : '', s.topProduct, c.crm.stage, c.tags.join(' ')].map(cell).join(','));
+      s.lastAt ? s.lastAt.slice(0, 10) : '', lastContact(c) || '', s.trend ? s.trend.cur.toFixed(2) : '', s.trend ? s.trend.prev.toFixed(2) : '', s.topProduct, stageOf(c).stage, c.tags.join(' ')].map(cell).join(','));
   }
   const url = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: `trade-hub-customers-${todayISO()}.csv` });
