@@ -6,6 +6,7 @@ import {
   setTag, setStage, saveNote, saveProfile, lastContact, orderSummary, addLog, updateLog, deleteLog, removeOffer, revenueSeries, todayISO, addDaysISO,
 } from '../store.js';
 import { html, raw, icon, money, money0, ago, fmtDate, dueLabel, trendBadge, statusChip, toast, openDrawer, busy, armed, columnChart, barList, adminUrl } from '../ui.js';
+import { emailCardShell, mountEmailCard } from './email-card.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
@@ -129,6 +130,8 @@ export function render(el, numericId) {
             </div>
           </section>
 
+          ${emailCardShell()}
+
           <section class="card">
             <div class="card__head"><h2 class="h2">Activity</h2><button class="btn btn--sm" data-log>${icon('plus', 'i--sm')}Log</button></div>
             ${log.length ? html`<div class="timeline">${log.map((e) => timelineItem(e, today))}</div>`
@@ -141,6 +144,7 @@ export function render(el, numericId) {
   if (s.orders.length) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
+  mountEmailCard(el.querySelector('[data-email-card]'), c);
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
   el.querySelector('[data-edit-details]').addEventListener('click', () => openDetailsDrawer(c));
   const email = el.querySelector('[data-email]');

@@ -383,3 +383,7 @@ button { font: inherit; }
 @media (max-width: 900px) { .board { grid-auto-columns: 82vw; } }
 .nav__signout { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
 .nav__signout .btn { color: rgba(255,255,255,.82); } .nav__signout .btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+/* ---- Email ---- */
+.email-frame { width: 100%; min-height: 260px; border: 1px solid var(--border-subtle); border-radius: var(--radius-input); background: #fff; display: block; }
+.email-excerpt { white-space: pre-wrap; color: var(--text-muted); }
