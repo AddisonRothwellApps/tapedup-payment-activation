@@ -14,7 +14,8 @@
 //     installation, private to the app
 import { gql, assertOk, paginate } from './api.js';
 
-export const TAGS = { dealer: 'b2b', terms: 'terms', starter: 'starter-order' };
+// trade-lead: someone who replied to outreach but has no trade pricing yet.
+export const TAGS = { dealer: 'b2b', lead: 'trade-lead', terms: 'terms', starter: 'starter-order' };
 const NS = 'tapedup';
 const OFFER_KEY = 'starter_offer';
 const CRM_KEY = 'crm';
@@ -174,7 +175,7 @@ export async function loadCustomers(onProgress) {
         nodes { ${CUSTOMER_FIELDS} }
       }
     }`,
-    { q: `tag:${TAGS.dealer}` }, (d) => d.customers, { pageSize: 80, onPage: onProgress },
+    { q: `tag:${TAGS.dealer} OR tag:${TAGS.lead}` }, (d) => d.customers, { pageSize: 80, onPage: onProgress },
   );
   state.customers = new Map();
   state.byNumericId = new Map();
@@ -192,6 +193,7 @@ export async function refreshCustomer(id) {
 }
 
 export const isDealer = (c) => !!c && c.tags.includes(TAGS.dealer);
+export const isLead = (c) => !!c && !isDealer(c) && c.tags.includes(TAGS.lead);
 export const isTerms = (c) => !!c && c.tags.includes(TAGS.terms);
 /** Trade accounts are known by their gym/shop name. */
 export const label = (c) => (!c ? '' : c.company || c.name);

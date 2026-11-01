@@ -2,11 +2,12 @@
 // their starter offer, account switches (trade / terms / stage / note) and
 // the comms log.
 import {
-  state, insights, isDealer, isTerms, label, sublabel, shortTape, offerStatus, describeOffer, offerHeadline, defaultTemplate, STATUS, STAGES, LOG_TYPES, TAGS, stageOf,
+  state, insights, isDealer, isLead, isTerms, label, sublabel, shortTape, offerStatus, describeOffer, offerHeadline, defaultTemplate, STATUS, STAGES, LOG_TYPES, TAGS, stageOf,
   setTag, setStage, saveNote, saveProfile, lastContact, orderSummary, addLog, updateLog, deleteLog, removeOffer, revenueSeries, todayISO, addDaysISO,
 } from '../store.js';
 import { html, raw, icon, money, money0, ago, fmtDate, dueLabel, trendBadge, statusChip, toast, openDrawer, busy, armed, columnChart, barList, adminUrl } from '../ui.js';
 import { emailCardShell, mountEmailCard } from './email-card.js';
+import { samplesCardShell, mountSamplesCard } from './samples-card.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
@@ -38,7 +39,7 @@ export function render(el, numericId) {
       <a class="back" href="#/customers">${icon('arrow-left', 'i--sm')}Customers</a>
       <div class="page-head">
         <div style="min-width:0">
-          <p class="eyebrow">${isDealer(c) ? 'Trade account' : 'No longer a trade account'}</p>
+          <p class="eyebrow">${isDealer(c) ? 'Trade account' : isLead(c) ? 'Trade lead: no trade pricing yet' : 'No longer a trade account'}</p>
           <h1 class="h1">${label(c)}</h1>
           <div class="row row--wrap" style="margin-top:10px;gap:8px">
             ${isTerms(c) ? html`<span class="badge">Pays on terms</span>` : ''}
@@ -130,6 +131,8 @@ export function render(el, numericId) {
             </div>
           </section>
 
+          ${samplesCardShell()}
+
           ${emailCardShell()}
 
           <section class="card">
@@ -144,6 +147,7 @@ export function render(el, numericId) {
   if (s.orders.length) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
+  mountSamplesCard(el.querySelector('[data-samples-card]'), c);
   mountEmailCard(el.querySelector('[data-email-card]'), c);
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
   el.querySelector('[data-edit-details]').addEventListener('click', () => openDetailsDrawer(c));

@@ -2,6 +2,7 @@
 // shipping amounts, and a check of what the app is allowed to see. Ported
 // from the original one-page activation screen -- same lookups and
 // mutations, laid out as one list.
+import { sampleSettingsCard, mountSampleSettings } from './sample-settings.js';
 import { gql, assertOk } from '../api.js';
 import { hasScope, hasAllOrders } from '../store.js';
 import { html, icon, toast, busy } from '../ui.js';
@@ -116,6 +117,8 @@ const SCOPES = [
   ['read_orders', 'Orders', 'Dashboard, trends, order history'],
   ['read_all_orders', 'All orders (not just 60 days)', 'Trends, 12-month view, reorder patterns'],
   ['write_orders', 'Create orders', 'Bringing order history over from Notion'],
+  ['write_draft_orders', 'Draft orders', 'Free sample orders'],
+  ['write_discounts', 'Discounts', 'One-use sample codes'],
 ];
 
 export function render(el) {
@@ -174,6 +177,8 @@ export function render(el) {
         </div>
       </section>
 
+      ${sampleSettingsCard()}
+
       <section class="card">
         <div class="card__head"><h2 class="h2">Import from Notion</h2><span class="muted small">One-off: the old dealer tracker</span></div>
         <div class="fn" style="border-top:0;padding-top:0">
@@ -190,11 +195,12 @@ export function render(el) {
             <span class="status ${ok ? 'status--active' : 'status--lapsed'}">${ok ? 'Allowed' : 'Not yet'}</span></div>`; })}</div>
         ${SCOPES.some(([s]) => (s === 'read_all_orders' ? !hasAllOrders() : !hasScope(s))) ? html`<div class="notice notice--info" style="margin-top:14px">${icon('circle-alert')}<div>
           Missing permissions arrive with the next app deploy: open the app from Shopify admin and approve them when asked. "All orders" may need a one-off request in the app's dashboard (API access → Read all orders) before it can be added.</div></div>` : ''}
-        <p class="muted small" style="margin:14px 0 0">Trade Hub only loads customers tagged "b2b" (trade accounts) and their orders. Retail customers stay in Shopify's own screens.</p>
+        <p class="muted small" style="margin:14px 0 0">Trade Hub only loads customers tagged "b2b" (trade accounts) or "trade-lead" (replied to outreach, no trade pricing yet) and their orders. Retail customers stay in Shopify's own screens.</p>
         <p class="muted small" style="margin:14px 0 0">If customer names or emails show blank, turn on protected customer data (name, email, phone) for this app in its dashboard.</p>
       </section>
     </div>`);
 
+  mountSampleSettings(el.querySelector('[data-sample-settings]'));
   const connect = el.querySelector('[data-connect]');
   if (connect) connect.addEventListener('click', () => {
     busy(connect, connectTradeServer)

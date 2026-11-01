@@ -34,7 +34,16 @@ client secret anywhere in this repo.
   versions (Lead, Prospect, Customer, Key account, Inactive) are read as
   their new stage and only rewritten when moved; key accounts keep a
   `key-account` label. Accounts with no stage are placed from their orders
-  and marked Suggested.
+  and marked Suggested. At trade.tapedup.co.uk, cold prospects from the
+  trade server appear too (badged Prospect; their menu only offers
+  Prospect / Contacted / Not now / Lost).
+
+- **Prospects** `#/prospects` (trade.tapedup.co.uk) — gyms and shops not yet
+  in Shopify, stored on the trade server. Import the prospects CSV, add
+  missing emails, select up to 50 and draft their first email (intro or
+  re-introduction, as chosen per prospect) into the Outbox. When one replies
+  they become a Shopify customer tagged `trade-lead` (no trade pricing) and
+  leave this list.
 
 - **Dashboard** `#/` — revenue, orders, customers ordering and average order vs
   the previous period; revenue chart; best tapes; best dealers; who's ordering
@@ -55,7 +64,9 @@ client secret anywhere in this repo.
   starter offer", add trade account) and each one's page: stats, spend by
   month, best tapes, orders, details (company, contact, emails, phone,
   address, last contact), starter offer, trade / terms switches,
-  pipeline stage, Shopify note, their emails with trade@ (draft from a template, see the thread), and the activity log (calls, emails,
+  pipeline stage, Shopify note, samples and account (send a free sample
+  pack as a £0 order tagged `trade-sample`, or a one-use code; open their
+  trade account, which tags `b2b` and drafts the walkthrough email), their emails with trade@ (draft from a template, see the thread), and the activity log (calls, emails,
   visits, samples, notes, with follow-up dates).
 - **Trade orders** `#/orders` — every synced trade order, filterable, linking
   to Shopify.
@@ -64,6 +75,8 @@ client secret anywhere in this repo.
 - **Follow-ups** `#/follow-ups` — open follow-ups (overdue / today / coming
   up) and the latest activity across all customers.
 - **Setup** `#/setup` — switch on each checkout rule, B2B shipping amounts,
+  the trade sample pack (products, monthly cap; saved to
+  `tapedup_admin.trade_settings`),
   which permissions the app has, and the Notion import.
 - **Import from Notion** `#/import` — one-off move from the old Notion dealer
   tracker (see below).
