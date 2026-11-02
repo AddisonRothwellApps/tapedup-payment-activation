@@ -7,6 +7,7 @@ import { EMBEDDED } from './env.js';
 import * as dashboard from './views/dashboard.js';
 import * as pipeline from './views/pipeline.js';
 import * as customers from './views/customers.js';
+import * as prospects from './views/prospects.js';
 import * as outbox from './views/outbox.js';
 import * as templates from './views/templates.js';
 import * as customer from './views/customer.js';
@@ -19,6 +20,7 @@ import * as importer from './views/import.js';
 const NAV = [
   { key: 'dashboard', href: '#/', label: 'Dashboard', icon: 'layout-dashboard' },
   { key: 'pipeline', href: '#/pipeline', label: 'Pipeline', icon: 'square-kanban' },
+  { key: 'prospects', href: '#/prospects', label: 'Prospects', icon: 'target' },
   { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
   { key: 'outbox', href: '#/outbox', label: 'Outbox', icon: 'inbox' },
   { key: 'templates', href: '#/templates', label: 'Email templates', icon: 'mail' },
@@ -31,6 +33,7 @@ const NAV = [
 const ROUTES = [
   { nav: 'dashboard', re: /^\/?$/, view: dashboard },
   { nav: 'pipeline', re: /^\/pipeline$/, view: pipeline },
+  { nav: 'prospects', re: /^\/prospects$/, view: prospects },
   { nav: 'customers', re: /^\/customers$/, view: customers },
   { nav: 'customers', re: /^\/customers\/(\d+)$/, view: customer },
   { nav: 'outbox', re: /^\/outbox$/, view: outbox },
@@ -146,6 +149,7 @@ async function start() {
   outboxBadge();
   setInterval(outboxBadge, 120000);
   window.addEventListener('outbox-changed', outboxBadge);
+  window.addEventListener('prospects-changed', () => { if (current && current.view === pipeline) renderView(false); });
 }
 
 start();

@@ -30,7 +30,7 @@ export function render(el) {
     <div class="page">
       <div class="page-head">
         <div><p class="eyebrow">Email</p><h1 class="h1">Templates</h1>
-          <p class="muted" style="margin:4px 0 0">One email per step of the pipeline. Plain text: a blank line starts a new paragraph, and fields in {curly brackets} are filled in for each dealer.</p></div>
+          <p class="muted" style="margin:4px 0 0">One email per step of the pipeline. Plain text: a blank line starts a new paragraph, and fields in {curly brackets} are filled in for each dealer. Add a fallback after a bar for when it's blank: {first_name|there}.</p></div>
         <div class="page-head__actions"><button class="btn btn--outline" data-new>${icon('plus')}New template</button></div>
       </div>
       ${!emailState.saved ? html`<div class="notice notice--info">${icon('info')}<div><strong>These are the starting templates and aren't saved yet.</strong> Read them over, add your signature, then press Save on any template (or below) to switch email drafting on.
@@ -47,7 +47,7 @@ export function render(el) {
           <thead><tr><th>Template</th><th>Stage</th><th class="hide-sm">Sends</th><th class="hide-sm">Approval</th><th></th></tr></thead>
           <tbody>${list.map((t) => html`
             <tr class="${t.active === false ? 'muted' : ''}">
-              <td><div class="strong">${t.name}</div><div class="small muted">${t.subject}</div></td>
+              <td><div class="strong">${t.name}${t.isNew ? html` <span class="badge badge--cyan">New: save to use</span>` : ''}</div><div class="small muted">${t.subject}</div></td>
               <td class="nowrap"><span class="badge">${t.stage}</span>${t.firstTouch ? html` <span class="badge badge--cyan" title="Starts a new conversation: counts against the daily limit">New conversation</span>` : ''}</td>
               <td class="hide-sm nowrap small">${t.delayDays ? `${t.delayDays} days after the last email` : 'When drafted'}</td>
               <td class="hide-sm nowrap small">${t.approval === 'auto' ? 'Automatic (agent)' : 'You approve'}</td>
