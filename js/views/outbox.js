@@ -67,14 +67,15 @@ export function render(el) {
             <div class="card__head" style="align-items:flex-start">
               <div style="min-width:0">
                 <div class="strong">${item.subject}</div>
-                <div class="small muted">To ${customerLink(item)} &lt;${item.to_address}&gt; · ${item.is_reply ? 'reply in thread' : 'new email'}${item.first_touch ? ' · new conversation' : ''} · ${item.template_key || 'custom'}</div>
-                <div class="small muted">${item.status === 'sent' ? `Sent ${ago(item.sent_at)}` : `Drafted ${ago(item.created_at)} by ${item.created_by}`}${item.approved_by ? ` · approved by ${item.approved_by}` : ''}</div>
+                <div class="small muted">To ${customerLink(item)} &lt;${item.to_address}&gt; · ${item.is_reply ? 'reply in thread' : 'new email'}${item.first_touch ? ' · new conversation' : ''} · ${item.template_key === 'agent-reply' ? 'written by the agent' : item.template_key || 'custom'}</div>
+                <div class="small muted">${item.status === 'sent' ? `Sent ${ago(item.sent_at)}` : `Drafted ${ago(item.created_at)} by ${item.created_by === 'agent' ? 'the agent' : item.created_by}`}${item.approved_by ? ` · approved by ${item.approved_by}` : ''}</div>
               </div>
               ${['pending_approval', 'approved', 'scheduled', 'failed'].includes(item.status) ? html`<div class="row row--wrap" style="gap:6px;justify-content:flex-end">
                 ${item.status === 'pending_approval' ? html`<button class="btn btn--sm" data-approve="${item.id}">${icon('send', 'i--sm')}Approve and send</button>` : ''}
                 ${item.status !== 'failed' ? html`<button class="btn btn--outline btn--sm" data-editd="${item.id}">${icon('pencil', 'i--sm')}Edit</button>` : ''}
                 <button class="btn btn--ghost btn--sm" data-reject="${item.id}">Reject</button></div>` : ''}
             </div>
+            ${item.agent_note ? html`<div class="notice notice--info" style="margin-bottom:12px">${icon('sparkles')}<div>${item.agent_note}</div></div>` : ''}
             ${item.error ? html`<div class="notice ${item.status === 'failed' ? 'notice--err' : 'notice--info'}" style="margin-bottom:12px">${icon('circle-alert')}<div>${item.error}</div></div>` : ''}
             <iframe class="email-frame" sandbox="" title="Email to ${item.customer_name || item.to_address}" data-frame="${item.id}"></iframe>
           </section>`)}</div>`}

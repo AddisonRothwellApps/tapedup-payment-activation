@@ -387,3 +387,7 @@ button { font: inherit; }
 /* ---- Email ---- */
 .email-frame { width: 100%; min-height: 260px; border: 1px solid var(--border-subtle); border-radius: var(--radius-input); background: #fff; display: block; }
 .email-excerpt { white-space: pre-wrap; color: var(--text-muted); }
+
+/* Agent: spend against the monthly budget */
+.meter { height: 6px; border-radius: 999px; background: var(--border-subtle); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--brand-primary); border-radius: inherit; }

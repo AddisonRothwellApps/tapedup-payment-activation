@@ -9,6 +9,7 @@ import * as pipeline from './views/pipeline.js';
 import * as customers from './views/customers.js';
 import * as prospects from './views/prospects.js';
 import * as outbox from './views/outbox.js';
+import * as agent from './views/agent.js';
 import * as templates from './views/templates.js';
 import * as customer from './views/customer.js';
 import * as orders from './views/orders.js';
@@ -24,6 +25,7 @@ const NAV = [
   { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
   { key: 'outbox', href: '#/outbox', label: 'Outbox', icon: 'inbox' },
   { key: 'templates', href: '#/templates', label: 'Email templates', icon: 'mail' },
+  { key: 'agent', href: '#/agent', label: 'Agent', icon: 'sparkles' },
   { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
   { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
   { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
@@ -38,6 +40,7 @@ const ROUTES = [
   { nav: 'customers', re: /^\/customers\/(\d+)$/, view: customer },
   { nav: 'outbox', re: /^\/outbox$/, view: outbox },
   { nav: 'templates', re: /^\/templates$/, view: templates },
+  { nav: 'agent', re: /^\/agent$/, view: agent },
   { nav: 'orders', re: /^\/orders$/, view: orders },
   { nav: 'offers', re: /^\/offers$/, view: offers },
   { nav: 'follow-ups', re: /^\/follow-ups$/, view: followups },

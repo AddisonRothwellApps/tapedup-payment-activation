@@ -107,7 +107,7 @@ function openEditor(el, existing) {
         <label class="field"><span>Starter offer to attach</span><select class="select" data-f="offerTemplateId"><option value="">None</option>${state.templates.map((o) => html`<option value="${o.id}" ${o.id === t.offerTemplateId ? raw('selected') : ''}>${o.name}</option>`)}</select></label>
         <label class="field"><span>Approval</span><select class="select" data-f="approval">
           <option value="always" ${t.approval !== 'auto' ? raw('selected') : ''}>Always ask me first</option>
-          <option value="auto" ${t.approval === 'auto' ? raw('selected') : ''}>Agent may send it (phase 4)</option></select></label>
+          <option value="auto" ${t.approval === 'auto' ? raw('selected') : ''}>Agent may send it (when auto-send is on)</option></select></label>
       </div>
       <label class="check"><input type="checkbox" data-f="firstTouch" ${t.firstTouch ? raw('checked') : ''}><span><span class="strong">Starts a new conversation</span><br><span class="muted small">Sent as a new email rather than a reply, and counts against the daily limit for new conversations.</span></span></label>
       <label class="check"><input type="checkbox" data-f="optOut" ${t.optOut ?? t.firstTouch ? raw('checked') : ''}><span><span class="strong">Add the TapedUp Limited line with an unsubscribe link</span><br><span class="muted small">Keep this on for anyone who isn't a customer yet.</span></span></label>
