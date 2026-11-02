@@ -118,7 +118,7 @@ const SCOPES = [
   ['read_all_orders', 'All orders (not just 60 days)', 'Trends, 12-month view, reorder patterns'],
   ['write_orders', 'Create orders', 'Bringing order history over from Notion'],
   ['write_draft_orders', 'Draft orders', 'Free sample orders'],
-  ['write_discounts', 'Discounts', 'One-use sample codes'],
+  ['write_discounts', 'Discounts', 'Starter offers and discounts'],
 ];
 
 export function render(el) {
