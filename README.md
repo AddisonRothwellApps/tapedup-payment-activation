@@ -40,12 +40,22 @@ client secret anywhere in this repo.
   the previous period; revenue chart; best tapes; best dealers; who's ordering
   more / less; follow-ups due; who's past their usual reorder time. The period
   (30 days / 90 days / 12 months) scopes it all.
+- **Outbox** `#/outbox` (trade.tapedup.co.uk) — dealer emails waiting for
+  approval, queued, sent, failed or rejected, each shown as the dealer will
+  see it. Approve and send, edit (fields are re-filled on save) or reject.
+  Shows today's sends against the server's warm-up limits.
+- **Email templates** `#/templates` — one email per pipeline step plus the
+  signature, saved to the app-data metafield `tapedup_admin.email_templates`
+  so every copy and the trade server share them. Plain text with {fields};
+  at trade.tapedup.co.uk the editor previews the real email for any dealer
+  and sends you a test. `js/email-templates.js` holds the starting set,
+  written in the storefront's voice.
 - **Customers** `#/customers` and `#/customers/<id>` — the trade-account list
   (search, filters, sort incl. longest since contact, CSV export, bulk "give
   starter offer", add trade account) and each one's page: stats, spend by
   month, best tapes, orders, details (company, contact, emails, phone,
   address, last contact), starter offer, trade / terms switches,
-  pipeline stage, Shopify note, and the activity log (calls, emails,
+  pipeline stage, Shopify note, their emails with trade@ (draft from a template, see the thread), and the activity log (calls, emails,
   visits, samples, notes, with follow-up dates).
 - **Trade orders** `#/orders` — every synced trade order, filterable, linking
   to Shopify.

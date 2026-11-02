@@ -253,3 +253,13 @@ export function adminUrl(path) {
   const handle = String(window.tradeHubShop || '').replace(/\.myshopify\.com$/, '');
   return handle ? `https://admin.shopify.com/store/${handle}/${path}` : `https://admin.shopify.com/${path}`;
 }
+
+/** Shows an email's HTML in a sandboxed frame sized to fit. Scripts never run (no allow-scripts). */
+export function showEmail(frame, htmlSource) {
+  if (!frame) return;
+  frame.setAttribute('sandbox', 'allow-same-origin');
+  frame.onload = () => {
+    try { frame.style.height = `${frame.contentDocument.documentElement.scrollHeight + 4}px`; } catch (err) { /* keep the default height */ }
+  };
+  frame.srcdoc = htmlSource;
+}

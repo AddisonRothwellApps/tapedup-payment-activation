@@ -7,6 +7,8 @@ import { EMBEDDED } from './env.js';
 import * as dashboard from './views/dashboard.js';
 import * as pipeline from './views/pipeline.js';
 import * as customers from './views/customers.js';
+import * as outbox from './views/outbox.js';
+import * as templates from './views/templates.js';
 import * as customer from './views/customer.js';
 import * as orders from './views/orders.js';
 import * as offers from './views/offers.js';
@@ -18,6 +20,8 @@ const NAV = [
   { key: 'dashboard', href: '#/', label: 'Dashboard', icon: 'layout-dashboard' },
   { key: 'pipeline', href: '#/pipeline', label: 'Pipeline', icon: 'square-kanban' },
   { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
+  { key: 'outbox', href: '#/outbox', label: 'Outbox', icon: 'inbox' },
+  { key: 'templates', href: '#/templates', label: 'Email templates', icon: 'mail' },
   { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
   { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
   { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
@@ -29,6 +33,8 @@ const ROUTES = [
   { nav: 'pipeline', re: /^\/pipeline$/, view: pipeline },
   { nav: 'customers', re: /^\/customers$/, view: customers },
   { nav: 'customers', re: /^\/customers\/(\d+)$/, view: customer },
+  { nav: 'outbox', re: /^\/outbox$/, view: outbox },
+  { nav: 'templates', re: /^\/templates$/, view: templates },
   { nav: 'orders', re: /^\/orders$/, view: orders },
   { nav: 'offers', re: /^\/offers$/, view: offers },
   { nav: 'follow-ups', re: /^\/follow-ups$/, view: followups },
@@ -49,7 +55,7 @@ function renderNav() {
   const today = todayISO();
   const due = state.customersLoaded ? followUps().filter((f) => f.entry.followUp <= today).length : 0;
   nav.innerHTML = String(html`${NAV.map((n) => html`
-    <a href="${n.href}" ${current && current.nav === n.key ? html`aria-current="page"` : ''}>${icon(n.icon)}<span>${n.label}</span>${n.key === 'follow-ups' && due ? html`<span class="nav__count" title="${due} due or overdue">${due}</span>` : ''}</a>`)}
+    <a href="${n.href}" ${current && current.nav === n.key ? html`aria-current="page"` : ''}>${icon(n.icon)}<span>${n.label}</span>${n.key === 'follow-ups' && due ? html`<span class="nav__count" title="${due} due or overdue">${due}</span>` : ''}${n.key === 'outbox' && outbox.outboxCount() ? html`<span class="nav__count" title="Waiting for your approval">${outbox.outboxCount()}</span>` : ''}</a>`)}
     ${EMBEDDED ? '' : html`<form method="post" action="/auth/logout" class="nav__signout"><button class="btn btn--ghost btn--sm" type="submit">${icon('log-out', 'i--sm')}Sign out</button></form>`}`);
 }
 
@@ -135,6 +141,11 @@ async function start() {
   syncOrders();
   // Keep "synced 3 min ago" honest while the app stays open.
   setInterval(renderSync, 60000);
+  // Outbox badge: how many emails are waiting for approval (trade.tapedup.co.uk only).
+  const outboxBadge = () => outbox.refreshOutboxStatus().then((s) => { if (s) renderNav(); });
+  outboxBadge();
+  setInterval(outboxBadge, 120000);
+  window.addEventListener('outbox-changed', outboxBadge);
 }
 
 start();
