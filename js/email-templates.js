@@ -74,13 +74,72 @@ If it is, the samples are ready to go whenever you are. Just reply with where to
 Happy climbing,`,
     },
     {
-      key: 'sample-confirm', name: 'Sample on its way', stage: 'Replied', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
+      key: 'sample-confirm', name: 'Sample on its way (with prices and starter offer)', stage: 'Replied', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
       subject: 'Your TapedUp samples are on the way',
       body: `Hi {first_name|there},
 
-Brilliant, thank you. Your sample pack is being packed now and should be with you in a few days.
+Brilliant, your free sample pack is booked in and should be with {gym_name} in a few days. Put it on the wall and watch how fast the plain white roll gets left behind.
 
-I'll check in once you've had a chance to try it on the wall. Any questions before then, just reply here.`,
+While you wait, here's how stocking TapedUp works.
+
+Trade price per 7.5m roll (shelf price in brackets):
+
+Plain: Black and White
+1.25cm £1.02 (£2.45) · 2.5cm £1.44 (£3.45) · 5cm £2.27 (£5.45)
+
+Colours: Doodle, Icons, Caution and Bold Bolder
+1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
+
+Complex colours: Comic
+1.25cm £1.35 (£3.25) · 2.5cm £2.60 (£6.25) · 5cm £3.44 (£8.25)
+
+PRO Rayon
+2 x 0.5cm £1.85 (£4.45) · 3.8cm £3.10 (£7.45)
+
+That's a 50% margin on every roll. We're not VAT registered yet, so there's no VAT on our invoices. No minimum order, and delivery is free over £100.
+
+The easiest way in is our starter offer: 85 rolls across the whole range for £100, delivered free.
+- 22 plain rolls (Black and White, all three widths)
+- 38 colour rolls (Doodle and Icons)
+- 15 Comic rolls
+- 10 PRO Rayon rolls
+
+That's £133 of stock at trade price for £100, and it sells for over £320 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
+
+Want the starter offer? Just reply "starter" and I'll open your trade account with it ready at checkout. Or try the samples first and I'll check in once they've had a few sessions.`,
+    },
+    {
+      key: 'pricing', name: 'Prices and starter offer', stage: 'Replied', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
+      subject: 'TapedUp trade prices for {gym_name}',
+      body: `Hi {first_name|there},
+
+Here's everything you need to stock TapedUp at {gym_name}.
+
+Trade price per 7.5m roll (shelf price in brackets):
+
+Plain: Black and White
+1.25cm £1.02 (£2.45) · 2.5cm £1.44 (£3.45) · 5cm £2.27 (£5.45)
+
+Colours: Doodle, Icons, Caution and Bold Bolder
+1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
+
+Complex colours: Comic
+1.25cm £1.35 (£3.25) · 2.5cm £2.60 (£6.25) · 5cm £3.44 (£8.25)
+
+PRO Rayon
+2 x 0.5cm £1.85 (£4.45) · 3.8cm £3.10 (£7.45)
+
+That's a 50% margin on every roll. We're not VAT registered yet, so there's no VAT on our invoices. No minimum order, and delivery is free over £100.
+
+The easiest way in is our starter offer: 85 rolls across the whole range for £100, delivered free.
+- 22 plain rolls (Black and White, all three widths)
+- 38 colour rolls (Doodle and Icons)
+- 15 Comic rolls
+- 10 PRO Rayon rolls
+
+That's £133 of stock at trade price for £100, and it sells for over £320 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
+
+Want it? Just reply "starter" and I'll open your trade account with the offer ready at checkout. Any questions, reply here.`,
     },
     {
       key: 'sample-checkin', name: 'Sample check-in', stage: 'Sample sent', firstTouch: false, optOut: false, delayDays: 5, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
