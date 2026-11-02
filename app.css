@@ -379,6 +379,9 @@ button { font: inherit; }
 .deal__meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .deal__meta > span { display: inline-flex; align-items: center; gap: 4px; }
 .deal__foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.deal__next { display: grid; gap: 3px; }
+.deal__next .select { min-height: 30px; padding: 4px 8px; font-size: var(--text-2xs); }
+.board__bulk { margin-top: 10px; width: 100%; justify-content: center; }
 .deal__move .select { min-height: 30px; padding: 4px 8px; font-size: var(--text-2xs); max-width: 140px; }
 @media (max-width: 900px) { .board { grid-auto-columns: 82vw; } }
 .nav__signout { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
