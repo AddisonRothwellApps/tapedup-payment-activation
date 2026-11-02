@@ -1,6 +1,8 @@
-// "Samples & account" on a customer's page: send a free sample pack (a
-// completed £0 order that lands in the pick/pack queue), or give them a
-// one-use code instead, and open their trade account. Runs on the trade
+// "Samples & account" on a customer's page: the free sample pack (a
+// completed £0 order that lands in the pick/pack queue) and opening their
+// trade account. When they reply with an address the agent puts the sample
+// order through by itself; the button here is for addresses that came in
+// another way (phone, in person). Runs on the trade
 // server, so only at trade.tapedup.co.uk.
 import { html, icon, money, fmtDate, toast, openDrawer, busy, armed, loadingBlock } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
@@ -31,25 +33,19 @@ export async function mountSamplesCard(card, c) {
   body.innerHTML = String(html`
     ${had ? html`<div class="list" style="margin-bottom:12px">${s.samples.map((x) => html`
       <div class="list__item"><span class="tl__icon">${icon(x.kind === 'order' ? 'package' : 'ticket', 'i--sm')}</span>
-        <span class="list__main"><span class="strong">${x.kind === 'order' ? `Sample order ${x.order_name}` : `Code ${x.code}`}</span>
+        <span class="list__main"><span class="strong">${x.kind === 'order' ? `Sample order ${x.order_name}` : `Old sample code ${x.code}`}</span>
         <span class="small muted">${money(Number(x.value_gbp))} retail · ${fmtDate(x.created_at)} · ${x.created_by}</span></span></div>`)}</div>`
       : !s.configured ? html`<p class="muted small" style="margin:0 0 12px">Choose what goes in a sample pack on the <a href="#/setup">Setup</a> screen first.</p>`
       : optedOut ? html`<p class="muted small" style="margin:0 0 12px">Opted out, so no samples.</p>`
       : html`<div class="row row--wrap" style="gap:6px;margin-bottom:6px">
-          <button class="btn btn--sm" data-send-sample>${icon('package', 'i--sm')}Send sample pack</button>
-          <button class="btn btn--sm btn--outline" data-code>${icon('ticket', 'i--sm')}Give a code instead</button></div>
-        <p class="muted small" style="margin:0 0 12px">One per business and per address.${s.monthlyCapGBP ? ` ${money(s.spentThisMonth)} of the ${money(s.monthlyCapGBP)} monthly cap used.` : ''}</p>`}
+          <button class="btn btn--sm" data-send-sample>${icon('package', 'i--sm')}Send sample pack</button></div>
+        <p class="muted small" style="margin:0 0 12px">Sent automatically when they reply with an address. One per business and per address.${s.monthlyCapGBP ? ` ${money(s.spentThisMonth)} of the ${money(s.monthlyCapGBP)} monthly cap used.` : ''}</p>`}
     ${isDealer(c) ? html`<p class="muted small" style="margin:0">${icon('check', 'i--sm')} Trade account open: they see trade prices when signed in.</p>`
       : html`<button class="btn btn--sm btn--outline" data-open>${icon('store', 'i--sm')}Open trade account</button>
         <p class="muted small" style="margin:6px 0 0">Tags them "b2b" for trade pricing, moves them to Account opened and drafts the walkthrough email for your approval.</p>`}`);
 
   const send = body.querySelector('[data-send-sample]');
   if (send) send.addEventListener('click', () => openSampleForm(c, () => mountSamplesCard(card, c)));
-
-  const code = body.querySelector('[data-code]');
-  if (code) armed(code, () => busy(code, () => serverApi('/api/samples/code', { method: 'POST', body: { customerId: c.id } }))
-    .then((r) => { toast(`Code ${r.code} made. Use the "Sample code" template to send it.`); return changed(c); })
-    .catch(() => {}), 'Make a one-use code?');
 
   const open = body.querySelector('[data-open]');
   if (open) armed(open, () => busy(open, () => serverApi('/api/accounts/open', { method: 'POST', body: { customerId: c.id } }))

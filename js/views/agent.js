@@ -93,10 +93,10 @@ export function render(el) {
       <section class="card">
         <div class="card__head"><h2 class="h2">How it works</h2></div>
         <ol class="small" style="margin:0;padding-left:18px;display:grid;gap:6px">
-          <li><strong>A reply arrives.</strong> The agent reads it, adds a one-line summary to their timeline, saves any delivery address for the sample form and any "try us in March" date as a follow-up. "Not now" and "not interested" move their stage.</li>
+          <li><strong>A reply arrives.</strong> The agent reads it, adds a one-line summary to their timeline, puts the free sample order straight through when they ask for samples and give an address (it flags the reply to you if it can't, say they've already had one), and saves any "try us in March" date as a follow-up. "Not now" and "not interested" move their stage.</li>
           <li><strong>It drafts an answer</strong> in the same thread, with a note on what it read. You approve, edit or reject it in the Outbox.</li>
           <li><strong>No answer?</strong> Follow-up 1 and 2 go out after each template's delay, then they move to Not now. A sample check-in follows a few days after each sample order.</li>
-          <li><strong>You stay in charge of anything that costs money:</strong> sample orders, codes and trade accounts are always your buttons.</li>
+          <li><strong>You stay in charge of the rest:</strong> trade accounts, prices and payment terms are always yours.</li>
         </ol>
       </section>
     </div>`);

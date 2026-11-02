@@ -19,7 +19,6 @@ export const FIELDS = [
   ['last_order_date', 'Last order date'],
   ['usual_tapes', 'Usual tapes'],
   ['sender_name', 'Your name'],
-  ['sample_code', 'Sample code'],
 ];
 
 export const TONES = [
@@ -82,17 +81,6 @@ Happy climbing,`,
 Brilliant, thank you. Your sample pack is being packed now and should be with you in a few days.
 
 I'll check in once you've had a chance to try it on the wall. Any questions before then, just reply here.`,
-    },
-    {
-      key: 'sample-code', name: 'Sample code (order it yourself)', stage: 'Replied', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
-      subject: 'Your free TapedUp sample code',
-      body: `Hi {first_name|there},
-
-Here's your code for a free sample pack: {sample_code}
-
-Pop it in at checkout on tapedup.co.uk and the sample tapes come off in full. It's good for 60 days and one use, and it only works when you're signed in with this email address.
-
-Any questions, just reply here.`,
     },
     {
       key: 'sample-checkin', name: 'Sample check-in', stage: 'Sample sent', firstTouch: false, optOut: false, delayDays: 5, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
