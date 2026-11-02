@@ -73,6 +73,7 @@ export async function loadBoot() {
     }
   }`);
   state.shop = data.shop;
+  window.tradeHubShop = data.shop.myshopifyDomain; // for admin links outside Shopify admin (ui.js adminUrl)
   state.appInstallationId = data.currentAppInstallation.id;
   state.scopes = new Set(data.currentAppInstallation.accessScopes.map((s) => s.handle));
   const saved = parseJson(data.currentAppInstallation.templates && data.currentAppInstallation.templates.value, null);
@@ -268,7 +269,41 @@ export const LOG_TYPES = {
   note: { label: 'Note', icon: 'notebook-pen' },
   auto: { label: 'Update', icon: 'refresh-cw' },
 };
-export const STAGES = ['Lead', 'Prospect', 'Customer', 'Key account', 'Inactive'];
+// The sales pipeline. Every trade account sits in exactly one stage.
+// `hint` is what should happen next, shown on the pipeline board.
+export const PIPELINE = [
+  { key: 'Prospect', hint: 'Send the intro and sample offer', tone: 'lead' },
+  { key: 'Contacted', hint: 'Follow up after 4 days, then 9', tone: 'new' },
+  { key: 'Replied', hint: 'Answer and offer the sample', tone: 'new' },
+  { key: 'Sample sent', hint: 'Check in 5 days after delivery', tone: 'due' },
+  { key: 'Account opened', hint: 'Nudge towards a first order', tone: 'due' },
+  { key: 'Active dealer', hint: 'Reorder reminders', tone: 'active' },
+  { key: 'Lapsed', hint: 'Win-back offer', tone: 'risk' },
+  { key: 'Not now', hint: 'Re-introduce in 90 days', tone: 'lapsed' },
+  { key: 'Lost', hint: 'No contact', tone: 'lapsed' },
+];
+export const STAGES = PIPELINE.map((p) => p.key);
+
+// Stages saved by earlier versions of Trade Hub, read as their pipeline stage.
+// They're only rewritten when someone moves the customer, so nothing is lost.
+export const LEGACY_STAGES = { Lead: 'Prospect', Prospect: 'Contacted', Customer: 'Active dealer', 'Key account': 'Active dealer', Inactive: 'Lapsed' };
+
+/**
+ * A customer's pipeline stage: the saved one (old names mapped across), or,
+ * when none is saved, a best guess from their orders, flagged as `guessed`
+ * so the board can show it isn't a decision anyone made.
+ */
+export function stageOf(c, now = Date.now()) {
+  const saved = c && c.crm && c.crm.stage;
+  if (saved && STAGES.includes(saved)) return { stage: saved, guessed: false };
+  if (saved && LEGACY_STAGES[saved]) return { stage: LEGACY_STAGES[saved], guessed: false, legacy: saved };
+  const s = insights(c, now).status;
+  if (s === 'lead') return { stage: 'Prospect', guessed: true };
+  if (s === 'lapsed' || s === 'risk') return { stage: 'Lapsed', guessed: true };
+  return { stage: 'Active dealer', guessed: true };
+}
+/** Key accounts keep a label when their old stage is mapped to Active dealer. */
+export const isKeyAccount = (c) => (c.crm.stage === 'Key account') || (c.crm.profile.labels || []).includes('key-account');
 
 export async function writeCrm(customer, mutate) {
   // Re-read just before writing so two people logging on the same customer
@@ -291,7 +326,16 @@ export const newLogEntry = ({ id, type, text, at, followUp }) => ({
 export const addLog = (customer, entry) => writeCrm(customer, (crm) => ({ ...crm, log: [newLogEntry(entry), ...crm.log] }));
 export const updateLog = (customer, id, patch) => writeCrm(customer, (crm) => ({ ...crm, log: crm.log.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
 export const deleteLog = (customer, id) => writeCrm(customer, (crm) => ({ ...crm, log: crm.log.filter((e) => e.id !== id) }));
-export const setStage = (customer, stage) => writeCrm(customer, (crm) => ({ ...crm, stage }));
+export const setStage = (customer, stage) => writeCrm(customer, (crm) => {
+  // A key account moved off its old "Key account" stage keeps the distinction as a label.
+  const labels = crm.profile.labels || [];
+  const keepKey = crm.stage === 'Key account' && stage !== 'Key account' && !labels.includes('key-account');
+  const profile = keepKey ? { ...crm.profile, labels: [...labels, 'key-account'] } : crm.profile;
+  const log = crm.stage !== stage && stage
+    ? [newLogEntry({ type: 'auto', text: `Stage: ${stageOf({ ...customer, crm }).stage} → ${stage}` }), ...crm.log]
+    : crm.log;
+  return { ...crm, stage, stageChangedAt: new Date().toISOString(), profile, log };
+});
 
 /** Every open follow-up across all customers, soonest first. */
 export function followUps() {

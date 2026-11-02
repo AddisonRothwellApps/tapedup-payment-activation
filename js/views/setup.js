@@ -5,6 +5,18 @@
 import { gql, assertOk } from '../api.js';
 import { hasScope, hasAllOrders } from '../store.js';
 import { html, icon, toast, busy } from '../ui.js';
+import { EMBEDDED, TRADE_SERVER } from '../env.js';
+
+// Gives trade.tapedup.co.uk this app's Admin API access: App Bridge hands us a
+// short-lived session token, the server checks it with the app secret and
+// swaps it for the app's offline token. Nothing secret passes through here.
+async function connectTradeServer() {
+  const token = await shopify.idToken();
+  const res = await fetch(`${TRADE_SERVER}/api/shopify/link`, { method: 'POST', headers: { authorization: `Bearer ${token}` } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.ok) throw new Error(body.message || body.error || `The trade server said ${res.status}`);
+  return body;
+}
 
 // A discount can't combine with another of its OWN class (Shopify rejects the
 // create), so each leaves its own class out and combines with the other two.
@@ -154,6 +166,15 @@ export function render(el) {
       </section>
 
       <section class="card">
+        <div class="card__head"><h2 class="h2">Trade dashboard</h2><span class="muted small">trade.tapedup.co.uk</span></div>
+        <div class="fn" style="border-top:0;padding-top:0">
+          ${EMBEDDED ? html`<p class="fn__desc" style="margin:0">Lets the trade dashboard at <a href="${TRADE_SERVER}" target="_blank" rel="noopener">trade.tapedup.co.uk</a> work with this store, signed in with Microsoft 365. It shares the same customers, pipeline and offers as this screen. Press once; press again only if the app's permissions change.</p>
+          <button class="btn btn--sm" data-connect>${icon('link', 'i--sm')}Connect trade.tapedup.co.uk</button>`
+          : html`<p class="fn__desc" style="margin:0">You're on the trade dashboard, connected to Shopify through this app. If Shopify stops responding here, open Trade Hub inside Shopify admin and press "Connect trade.tapedup.co.uk" on its Setup screen.</p>`}
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card__head"><h2 class="h2">Import from Notion</h2><span class="muted small">One-off: the old dealer tracker</span></div>
         <div class="fn" style="border-top:0;padding-top:0">
           <p class="fn__desc" style="margin:0">Brings dealers over from the Notion export: company names, contacts, last-contacted dates and call notes into each customer here, and their invoices into Shopify as archived orders they can see in their account. You check every match before anything is saved.</p>
@@ -174,6 +195,12 @@ export function render(el) {
       </section>
     </div>`);
 
+  const connect = el.querySelector('[data-connect]');
+  if (connect) connect.addEventListener('click', () => {
+    busy(connect, connectTradeServer)
+      .then(() => toast('trade.tapedup.co.uk is connected'))
+      .catch(() => {}); // busy() already shows the error
+  });
   const recheck = el.querySelector('[data-recheck]');
   recheck.addEventListener('click', () => { cache = null; render(el); });
   el.querySelectorAll('[data-activate]').forEach((b) => b.addEventListener('click', () => {

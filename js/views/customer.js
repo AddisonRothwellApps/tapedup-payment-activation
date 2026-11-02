@@ -2,7 +2,7 @@
 // their starter offer, account switches (trade / terms / stage / note) and
 // the comms log.
 import {
-  state, insights, isDealer, isTerms, label, sublabel, shortTape, offerStatus, describeOffer, offerHeadline, defaultTemplate, STATUS, STAGES, LOG_TYPES, TAGS,
+  state, insights, isDealer, isTerms, label, sublabel, shortTape, offerStatus, describeOffer, offerHeadline, defaultTemplate, STATUS, STAGES, LOG_TYPES, TAGS, stageOf,
   setTag, setStage, saveNote, saveProfile, lastContact, orderSummary, addLog, updateLog, deleteLog, removeOffer, revenueSeries, todayISO, addDaysISO,
 } from '../store.js';
 import { html, raw, icon, money, money0, ago, fmtDate, dueLabel, trendBadge, statusChip, toast, openDrawer, busy, armed, columnChart, barList, adminUrl } from '../ui.js';
@@ -41,7 +41,7 @@ export function render(el, numericId) {
           <h1 class="h1">${label(c)}</h1>
           <div class="row row--wrap" style="margin-top:10px;gap:8px">
             ${isTerms(c) ? html`<span class="badge">Pays on terms</span>` : ''}
-            ${c.crm.stage ? html`<span class="badge badge--cyan">${c.crm.stage}</span>` : ''}
+            ${(() => { const st = stageOf(c); return html`<span class="badge ${st.guessed ? '' : 'badge--cyan'}" title="${st.guessed ? 'Suggested from their orders: not set yet' : 'Pipeline stage'}">${st.stage}${st.guessed ? '?' : ''}</span>`; })()}
             ${statusChip(s.status, STATUS)}
             <span class="muted small">${[sublabel(c), c.email, c.phone, [c.city, c.country].filter(Boolean).join(', '), contacted ? `Last contacted ${ago(contacted)}` : ''].filter(Boolean).join(' · ')}</span>
           </div>
@@ -123,7 +123,7 @@ export function render(el, numericId) {
             <div class="form">
               <label class="check"><input type="checkbox" data-tag="${TAGS.dealer}" ${isDealer(c) ? raw('checked') : ''}><span><span class="strong">Trade account</span><br><span class="muted small">Trade pricing, B2B shipping and the dealer area (tag "${TAGS.dealer}")</span></span></label>
               <label class="check"><input type="checkbox" data-tag="${TAGS.terms}" ${isTerms(c) ? raw('checked') : ''}><span><span class="strong">Pays on terms</span><br><span class="muted small">Can order now, pay by invoice (tag "${TAGS.terms}")</span></span></label>
-              <label class="field"><span>Relationship</span><select class="select" data-stage><option value="">Not set</option>${STAGES.map((st) => html`<option ${c.crm.stage === st ? raw('selected') : ''}>${st}</option>`)}</select></label>
+              <label class="field"><span>Pipeline stage</span><select class="select" data-stage>${(() => { const cur = stageOf(c); return html`${cur.guessed ? html`<option value="" selected>Not set (looks like ${cur.stage})</option>` : ''}${STAGES.map((st) => html`<option ${!cur.guessed && cur.stage === st ? raw('selected') : ''}>${st}</option>`)}`; })()}</select></label>
               <label class="field"><span>Note (also shown in Shopify)</span><textarea class="textarea" data-note>${c.note}</textarea></label>
               <button class="btn btn--outline btn--sm" data-save-note style="justify-self:start">Save note</button>
             </div>
@@ -169,7 +169,7 @@ export function render(el, numericId) {
   }));
   el.querySelector('[data-stage]').addEventListener('change', (e) => {
     const stage = e.target.value;
-    busy(e.target, () => setStage(c, stage)).then(() => toast(stage ? `Marked as ${stage}` : 'Relationship cleared')).catch(() => {});
+    busy(e.target, () => setStage(c, stage)).then(() => toast(stage ? `Moved to ${stage}` : 'Stage cleared')).catch(() => {});
   });
   el.querySelector('[data-save-note]').addEventListener('click', (e) => {
     const note = el.querySelector('[data-note]').value;

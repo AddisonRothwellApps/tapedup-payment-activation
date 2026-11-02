@@ -12,7 +12,29 @@ Shopify's
 the embedded session (offline mode, see the app's `shopify.app.toml`). No
 client secret anywhere in this repo.
 
+## Two places it runs
+
+- **Inside Shopify admin** (embedded, GitHub Pages): as above, App Bridge
+  authenticates every Admin API call. Nothing here changes.
+- **At trade.tapedup.co.uk** (standalone): the same files, served by the
+  private `tapedup-trade-server` behind Microsoft 365 sign-in, without App
+  Bridge. `js/api.js` sends the same GraphQL to the server's
+  `/api/shopify/graphql`, which forwards it with this app's own offline
+  token, so both copies read and write the same metafields. `js/env.js`
+  decides which mode it's in. Setup → **Connect trade.tapedup.co.uk**
+  (embedded only) gives the server that token. Shopify's product picker is
+  App Bridge-only, so picking offer products still happens inside admin.
+
 ## Screens (hash routes, since GitHub Pages can't serve /customers)
+
+- **Pipeline** `#/pipeline` — every trade account as a card in its sales
+  stage (Prospect → Contacted → Replied → Sample sent → Account opened →
+  Active dealer, plus Lapsed, Not now, Lost). Drag a card or use its menu to
+  move it; overdue follow-ups sort to the top. Stages saved by older
+  versions (Lead, Prospect, Customer, Key account, Inactive) are read as
+  their new stage and only rewritten when moved; key accounts keep a
+  `key-account` label. Accounts with no stage are placed from their orders
+  and marked Suggested.
 
 - **Dashboard** `#/` — revenue, orders, customers ordering and average order vs
   the previous period; revenue chart; best tapes; best dealers; who's ordering
@@ -23,7 +45,7 @@ client secret anywhere in this repo.
   starter offer", add trade account) and each one's page: stats, spend by
   month, best tapes, orders, details (company, contact, emails, phone,
   address, last contact), starter offer, trade / terms switches,
-  relationship stage, Shopify note, and the activity log (calls, emails,
+  pipeline stage, Shopify note, and the activity log (calls, emails,
   visits, samples, notes, with follow-up dates).
 - **Trade orders** `#/orders` — every synced trade order, filterable, linking
   to Shopify.

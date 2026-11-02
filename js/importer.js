@@ -260,7 +260,7 @@ function crmFrom(row, c) {
     if (d.calls.length) bits.push(`${d.calls.length} call note${d.calls.length === 1 ? '' : 's'}`);
     if (d.lastContacted) bits.push(`last contacted ${d.lastContacted}`);
     push({ id: `notion-${d.notionId}-import`, type: 'auto', text: `Brought over from Notion: ${bits.join(', ')}` });
-    return { ...crm, stage: crm.stage || (d.orders.length ? 'Customer' : 'Prospect'), profile, log: [...add, ...crm.log] };
+    return { ...crm, stage: crm.stage || (d.orders.length ? 'Active dealer' : 'Prospect'), profile, log: [...add, ...crm.log] };
   };
 }
 
