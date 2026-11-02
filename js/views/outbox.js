@@ -18,6 +18,11 @@ const TABS = [
 
 export const outboxCount = () => (ui.status ? ui.status.pending : 0);
 
+// Always show a fresh list: when you open the Outbox, and when drafts are
+// made anywhere else (a customer page, the pipeline, the agent).
+window.addEventListener('hashchange', () => { if (location.hash.startsWith('#/outbox')) ui.items = null; });
+window.addEventListener('outbox-changed', () => { ui.items = null; });
+
 /** Called from the menu so the Outbox count stays current. */
 export async function refreshOutboxStatus() {
   if (!SERVER_FEATURES) return null;

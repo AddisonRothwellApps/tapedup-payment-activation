@@ -3,17 +3,118 @@
 // record, so it shows the same in Shopify admin and at trade.tapedup.co.uk.
 // Within a stage, overdue follow-ups come first, then whoever has waited
 // longest, so the top of each column is always the next thing to do.
+//
+// Each card also shows its next email, suggested from its stage and what we
+// last sent (change it with the dropdown, or pick "Don't email"). "Bulk
+// draft" on a column drafts every card's chosen email into the Outbox, where
+// each waits for "Approve and send". Nothing is sent from here.
 import { state, PIPELINE, STAGES, stageOf, setStage, label, sublabel, lastContact, todayISO, isKeyAccount } from '../store.js';
-import { html, raw, icon, ago, fmtDate, dueLabel, money0, toast } from '../ui.js';
+import { html, raw, icon, ago, fmtDate, dueLabel, money0, toast, armed, busy, openDrawer } from '../ui.js';
 import { prospectState, loadProspects, updateProspect } from '../prospects.js';
-import { SERVER_FEATURES } from '../server.js';
+import { SERVER_FEATURES, serverApi } from '../server.js';
+import { emailState, loadEmailTemplates } from '../email-templates.js';
 
 // Prospects (not yet in Shopify) can only be in these stages.
 const PROSPECT_STAGES = ['Prospect', 'Contacted', 'Not now', 'Lost'];
 
 const ui = { q: '', showClosed: false };
+// Next-email data: what each contact last got (from the trade server), the
+// email templates, and any choice made on a card this session.
+const mailUi = { steps: null, loading: null, error: '', choice: new Map() };
 const CLOSED = new Set(['Not now', 'Lost']);
 const DAY = 86400000;
+
+function loadMailData(el) {
+  if (!SERVER_FEATURES || mailUi.loading || (mailUi.steps && emailState.loaded)) return;
+  mailUi.loading = Promise.all([serverApi('/api/next-steps'), emailState.loaded ? null : loadEmailTemplates()])
+    .then(([steps]) => { mailUi.steps = steps; mailUi.error = ''; })
+    .catch((err) => { mailUi.error = err.message; })
+    .finally(() => { mailUi.loading = null; if (el.isConnected && location.hash.startsWith('#/pipeline')) render(el); });
+}
+
+const templates = () => new Map(((emailState.set && emailState.set.templates) || []).filter((t) => t.active !== false).map((t) => [t.key, t]));
+const refOf = (x) => (x.c ? x.c.id : `p${x.p.id}`);
+const infoOf = (x) => (mailUi.steps ? (x.c ? mailUi.steps.customers[x.c.id] : mailUi.steps.prospects[x.p.id]) : null) || {};
+const emailOf = (x) => (x.c ? x.c.email : x.p.email);
+const optedOut = (x) => (x.c ? !!x.c.crm.optOut : !!x.p.opt_out);
+
+/** The suggested next email for a card: a template key, or '' for none. */
+function suggest(x, tpl, now = Date.now()) {
+  const i = infoOf(x);
+  const has = (k) => (tpl.has(k) ? k : '');
+  const stage = x.c ? x.st.stage : x.p.stage;
+  const since = i.lastOut ? (now - Date.parse(i.lastOut)) / DAY : Infinity;
+  if (i.waiting || optedOut(x) || !emailOf(x)) return '';
+  if (i.lastIn && (!i.lastOut || i.lastIn > i.lastOut)) return ''; // they wrote last: answer in the thread
+  // The intro sequence: intro or re-intro, then follow-up 1, then 2.
+  const chase = () => {
+    if (i.lastKey === 'intro' || i.lastKey === 'reintro') return since >= ((tpl.get('followup-1') || {}).delayDays || 4) ? has('followup-1') : '';
+    if (i.lastKey === 'followup-1') return since >= 5 ? has('followup-2') : '';
+    if (i.lastKey === 'followup-2') return '';
+    return null;
+  };
+  const firstTouch = x.p ? (x.p.template === 'reintro' ? 'reintro' : 'intro') : 'intro';
+  switch (stage) {
+    case 'Prospect': { const c = chase(); return c !== null ? c : has(firstTouch); }
+    case 'Contacted': { const c = chase(); return c !== null ? c : has(x.p ? firstTouch : 'reintro'); }
+    case 'Sample sent': {
+      const ci = tpl.get('sample-checkin');
+      return ci && i.lastKey !== 'sample-checkin' && (!i.sampleAt || now - Date.parse(i.sampleAt) >= (ci.delayDays || 5) * DAY) ? 'sample-checkin' : '';
+    }
+    case 'Account opened': return i.lastKey === 'account-walkthrough' ? '' : has('account-walkthrough');
+    case 'Active dealer': {
+      if (since < 30) return '';
+      const last = x.c.lastOrderAt ? (now - Date.parse(x.c.lastOrderAt)) / DAY : Infinity;
+      return last >= 45 && x.c.lastOrderAt ? has('reorder') : '';
+    }
+    case 'Lapsed': return since < 30 ? '' : has('winback');
+    case 'Not now': return since < 60 ? '' : has('reintro');
+    default: return ''; // Replied (the agent drafts the answer) and Lost
+  }
+}
+
+/** The email a card will get from Bulk draft: the dropdown's choice, else the suggestion. */
+function chosen(x, tpl) {
+  const ref = refOf(x);
+  if (mailUi.choice.has(ref)) return mailUi.choice.get(ref);
+  return suggest(x, tpl);
+}
+
+function nextEmail(x, tpl) {
+  if (!SERVER_FEATURES) return '';
+  if (!mailUi.steps) return html`<div class="deal__next small muted">${mailUi.error ? '' : 'Checking next email…'}</div>`;
+  const i = infoOf(x);
+  const name = x.c ? label(x.c) : x.p.company;
+  if (i.waiting) return html`<div class="deal__next small"><span class="badge badge--cyan">${icon('inbox', 'i--sm')}In outbox</span></div>`;
+  if (optedOut(x)) return html`<div class="deal__next small muted">Opted out of email</div>`;
+  if (!emailOf(x)) return html`<div class="deal__next small muted">No email address</div>`;
+  const sug = suggest(x, tpl);
+  const pick = chosen(x, tpl);
+  return html`<label class="deal__next"><span class="small muted">Next email</span>
+    <select class="select input--sm" data-next="${refOf(x)}" aria-label="Next email for ${name}">
+      <option value="" ${pick === '' ? raw('selected') : ''}>Don't email${sug === '' ? ' (suggested)' : ''}</option>
+      ${[...tpl.values()].map((t) => html`<option value="${t.key}" ${pick === t.key ? raw('selected') : ''}>${t.name || t.key}${t.key === sug ? ' (suggested)' : ''}</option>`)}
+    </select></label>`;
+}
+
+async function bulkDraft(el, stage, list, tpl) {
+  const items = list.map((x) => ({ x, key: chosen(x, tpl) })).filter(({ x, key }) => key && !infoOf(x).waiting && emailOf(x) && !optedOut(x))
+    .map(({ x, key }) => (x.c ? { customerId: x.c.id, templateKey: key, name: label(x.c) } : { prospectId: x.p.id, templateKey: key, name: x.p.company }));
+  if (!items.length) { toast(`Nothing to draft in ${stage}`); return; }
+  const r = await serverApi('/api/outbox/bulk', { method: 'POST', body: { items } });
+  window.dispatchEvent(new Event('outbox-changed'));
+  mailUi.steps = null; mailUi.choice.clear();
+  loadProspects({ force: true });
+  loadMailData(el);
+  if (!r.failed.length) { toast(`${r.drafted} email${r.drafted === 1 ? '' : 's'} drafted. Approve them in the Outbox.`); return; }
+  openDrawer({
+    title: `${r.drafted} drafted, ${r.failed.length} skipped`, eyebrow: `Bulk draft: ${stage}`,
+    body: html`<div class="form">
+      <p class="muted small" style="margin:0">The drafted emails are waiting in the <a href="#/outbox">Outbox</a> for you to approve. These weren't drafted:</p>
+      <div class="list">${r.failed.map((f) => html`<div class="list__item"><span class="list__main"><span class="strong">${f.name || f.customerId || f.prospectId}</span><span class="small muted">${f.reason}</span></span></div>`)}</div></div>`,
+    foot: html`<a class="btn" href="#/outbox" data-close>${icon('inbox', 'i--sm')}Open the Outbox</a>`,
+  });
+}
 
 function nextFollowUp(c) {
   return c.crm.log.filter((e) => e.followUp && !e.done).map((e) => e.followUp).sort()[0] || '';
@@ -49,7 +150,8 @@ function cards(now) {
   return out;
 }
 
-function prospectCard({ p, contact }) {
+function prospectCard(x, tpl) {
+  const { p, contact } = x;
   return html`
     <article class="deal deal--prospect" aria-label="${p.company}">
       <a class="deal__name" href="#/prospects">${p.company}</a>
@@ -57,16 +159,17 @@ function prospectCard({ p, contact }) {
       <div class="deal__meta">
         ${contact ? html`<span class="small muted" title="Last emailed">${icon('send', 'i--sm')}${ago(contact)}</span>` : html`<span class="small muted">${p.email ? 'Not emailed yet' : 'No email address'}</span>`}
       </div>
+      ${nextEmail(x, tpl)}
       <div class="deal__foot">
-        <span class="row" style="gap:4px"><span class="badge" title="Not in Shopify until they reply">Prospect</span>${p.waiting ? html`<span class="badge badge--cyan">In outbox</span>` : ''}</span>
+        <span class="row" style="gap:4px"><span class="badge" title="Not in Shopify until they reply">Prospect</span></span>
         <label class="deal__move"><span class="visually-hidden">Move ${p.company} to</span>
           <select class="select input--sm" data-pmove="${p.id}">${PROSPECT_STAGES.map((s) => html`<option ${s === p.stage ? raw('selected') : ''}>${s}</option>`)}</select></label>
       </div>
     </article>`;
 }
 
-function card(x, today) {
-  if (x.p) return prospectCard(x);
+function card(x, today, tpl) {
+  if (x.p) return prospectCard(x, tpl);
   const { c, st, next, days, contact } = x;
   const due = next ? dueLabel(next, today) : null;
   return html`
@@ -78,6 +181,7 @@ function card(x, today) {
         ${contact ? html`<span class="small muted" title="Last contact">${icon('message-circle', 'i--sm')}${ago(contact)}</span>` : html`<span class="small muted">No contact logged</span>`}
         ${c.amountSpent ? html`<span class="small muted" title="Lifetime spend">${money0(c.amountSpent)}</span>` : ''}
       </div>
+      ${nextEmail(x, tpl)}
       <div class="deal__foot">
         <span class="row" style="gap:4px">
           ${st.guessed ? html`<span class="badge" title="Not set yet: guessed from their orders">Suggested</span>` : ''}
@@ -94,6 +198,8 @@ function card(x, today) {
 
 export function render(el) {
   if (SERVER_FEATURES && !prospectState.loaded && !prospectState.loading && !prospectState.error) loadProspects();
+  loadMailData(el);
+  const tpl = templates();
   const now = Date.now();
   const today = todayISO();
   const byStage = cards(now);
@@ -119,9 +225,11 @@ export function render(el) {
             <header class="board__head">
               <div class="row" style="justify-content:space-between"><h2 class="board__title"><span class="status status--${p.tone}"></span>${p.key}</h2><span class="board__count">${list.length}</span></div>
               <p class="small muted board__hint">${p.hint}</p>
+              ${SERVER_FEATURES && mailUi.steps ? (() => { const n = list.filter((x) => chosen(x, tpl) && !infoOf(x).waiting && emailOf(x) && !optedOut(x)).length; return html`
+                <button class="btn btn--outline btn--sm board__bulk" data-bulk="${p.key}" ${n ? '' : raw('disabled')} title="Drafts each card's chosen email into the Outbox for approval">${icon('mail', 'i--sm')}Bulk draft${n ? ` (${n})` : ''}</button>`; })() : ''}
             </header>
             <div class="board__cards" data-drop="${p.key}">
-              ${list.length ? list.slice(0, 60).map((x) => card(x, today)) : html`<p class="small muted board__empty">Nobody here</p>`}
+              ${list.length ? list.slice(0, 60).map((x) => card(x, today, tpl)) : html`<p class="small muted board__empty">Nobody here</p>`}
               ${list.length > 60 ? html`<a class="small board__empty" href="#/prospects">${list.length - 60} more on the Prospects screen</a>` : ''}
             </div>
           </section>`; })}
@@ -152,6 +260,11 @@ export function render(el) {
   el.querySelectorAll('[data-move]').forEach((s) => s.addEventListener('change', () => move(s.dataset.move, s.value)));
   el.querySelectorAll('[data-pmove]').forEach((s) => s.addEventListener('change', () => updateProspect(Number(s.dataset.pmove), { stage: s.value })
     .then(() => toast(`Moved to ${s.value}`)).catch((err) => { toast(err.message, 'err'); render(el); })));
+
+  // Next email: remember the choice for this session and refresh the column's count.
+  el.querySelectorAll('[data-next]').forEach((s) => s.addEventListener('change', () => { mailUi.choice.set(s.dataset.next, s.value); render(el); }));
+  el.querySelectorAll('[data-bulk]').forEach((b) => armed(b, () => busy(b, () => bulkDraft(el, b.dataset.bulk, byStage.get(b.dataset.bulk), tpl)).catch(() => {}),
+    `Click again: draft ${b.textContent.match(/\d+/)?.[0] || ''} emails`));
 
   // Drag and drop between columns.
   el.querySelectorAll('.deal').forEach((d) => {
