@@ -387,6 +387,11 @@ button { font: inherit; }
 .nav__signout { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
 .nav__signout .btn { color: rgba(255,255,255,.82); } .nav__signout .btn:hover { background: rgba(255,255,255,.08); color: #fff; }
 
+/* ---- Knowledge base ---- */
+.kb-item.list__item { padding: 12px; }
+.kb-item { width: 100%; text-align: left; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 8px; }
+.kb-item:hover { background: var(--surface-subtle); }
+
 /* ---- Email ---- */
 .email-frame { width: 100%; min-height: 260px; border: 1px solid var(--border-subtle); border-radius: var(--radius-input); background: #fff; display: block; }
 .email-excerpt { white-space: pre-wrap; color: var(--text-muted); }

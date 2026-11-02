@@ -3,7 +3,7 @@
 // server, so only at trade.tapedup.co.uk.
 import { html, raw, icon, ago, toast, busy, loadingBlock } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
-import { emailState, loadEmailTemplates, saveEmailTemplates, DEFAULT_FACTS, TONES } from '../email-templates.js';
+import { emailState, loadEmailTemplates, saveEmailTemplates, TONES } from '../email-templates.js';
 import { TRADE_SERVER } from '../env.js';
 
 const ui = { days: 90, status: null, results: null, error: null, loading: null };
@@ -77,8 +77,8 @@ export function render(el) {
       <section class="card">
         <div class="card__head"><h2 class="h2">What the agent may say</h2><span class="muted small">Used when it drafts replies</span></div>
         <div class="form">
-          <label class="field"><span>Facts about TapedUp</span><textarea class="textarea" rows="8" data-facts>${a.facts || DEFAULT_FACTS}</textarea></label>
-          <p class="muted small" style="margin:0">It only uses these facts. It won't quote prices, terms, delivery dates or stock: replies that need those are flagged for you. Add anything you're happy for it to say (new designs, widths, lead times).</p>
+          <div class="notice notice--info">${icon('book-open')}<div>${s.knowledgeArticles ? html`The agent answers from <strong>${s.knowledgeArticles} knowledge base article${s.knowledgeArticles === 1 ? '' : 's'}</strong>: products, prices, the starter offer, delivery and more.` : html`The agent can answer customers from <strong>knowledge base articles</strong> (prices, products, delivery…). Check the starter articles and save them to switch it on.`}
+            <div style="margin-top:8px"><a class="btn btn--sm btn--outline" href="#/knowledge">${icon('pencil', 'i--sm')}Edit the knowledge base</a></div></div></div>
           <div class="form-row">
             <label class="field"><span>Reply tone</span><select class="select" data-tone>${TONES.map(([k, l]) => html`<option value="${k}" ${(a.tone || 'brand') === k ? raw('selected') : ''}>${l}</option>`)}</select></label>
             <label class="field"><span>Agent replies</span><select class="select" data-reply>
@@ -96,7 +96,7 @@ export function render(el) {
           <li><strong>A reply arrives.</strong> The agent reads it, adds a one-line summary to their timeline, puts the free sample order straight through when they ask for samples and give an address (it flags the reply to you if it can't, say they've already had one), and saves any "try us in March" date as a follow-up. "Not now" and "not interested" move their stage.</li>
           <li><strong>It drafts an answer</strong> in the same thread, with a note on what it read. You approve, edit or reject it in the Outbox.</li>
           <li><strong>No answer?</strong> Follow-up 1 and 2 go out after each template's delay, then they move to Not now. A sample check-in follows a few days after each sample order.</li>
-          <li><strong>You stay in charge of the rest:</strong> trade accounts, prices and payment terms are always yours.</li>
+          <li><strong>Answers come from the knowledge base.</strong> It quotes prices and offers exactly as written there and flags anything it doesn't cover. Trade accounts and payment terms stay with you.</li>
         </ol>
       </section>
     </div>`);
@@ -108,8 +108,7 @@ export function render(el) {
     .catch(() => {}));
   const save = el.querySelector('[data-save]');
   save.addEventListener('click', () => {
-    const facts = el.querySelector('[data-facts]').value.trim();
-    const next = { facts: facts && facts !== DEFAULT_FACTS ? facts : '', tone: el.querySelector('[data-tone]').value, replyApproval: el.querySelector('[data-reply]').value };
+    const next = { ...(emailState.set.agent || {}), tone: el.querySelector('[data-tone]').value, replyApproval: el.querySelector('[data-reply]').value };
     busy(save, () => saveEmailTemplates({ ...emailState.set, agent: next })).then(() => { toast('Agent settings saved'); ui.status = null; render(el); }).catch(() => {});
   });
 }
