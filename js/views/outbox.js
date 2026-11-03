@@ -111,7 +111,7 @@ function openRetry(el, item) {
   openDrawer({
     title: 'Try again', eyebrow: `Reply to ${item.customer_name || item.to_address}`,
     body: html`<div class="form">
-      <p class="muted small" style="margin:0">The agent rewrites this reply from their email, using the knowledge base as it is now. Nothing else is repeated: no second sample order or account changes. The new draft replaces this one and waits here for approval.</p>
+      <p class="muted small" style="margin:0">The agent reads their email again and rewrites the reply, using the knowledge base as it is now. It picks up anything it missed (like an address), but never does anything twice: no second sample order or starter offer. The new draft replaces this one and waits here for approval.</p>
       <label class="field"><span>Anything it should do differently? (optional)</span><textarea class="textarea" data-note rows="4" placeholder="e.g. Shorter, and mention the free display stand"></textarea>
         <span class="muted small">Leave it blank if you've just fixed the knowledge base.</span></label>
     </div>`,
