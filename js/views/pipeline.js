@@ -13,6 +13,7 @@ import { html, raw, icon, ago, fmtDate, dueLabel, money0, toast, armed, busy, op
 import { prospectState, loadProspects, updateProspect } from '../prospects.js';
 import { SERVER_FEATURES, serverApi } from '../server.js';
 import { emailState, loadEmailTemplates } from '../email-templates.js';
+import { groupState, loadGroups, groupOfCustomer, groupOfProspect } from '../groups.js';
 
 // Prospects (not yet in Shopify) can only be in these stages.
 const PROSPECT_STAGES = ['Prospect', 'Contacted', 'Not now', 'Lost'];
@@ -26,7 +27,7 @@ const DAY = 86400000;
 
 function loadMailData(el) {
   if (!SERVER_FEATURES || mailUi.loading || (mailUi.steps && emailState.loaded)) return;
-  mailUi.loading = Promise.all([serverApi('/api/next-steps'), emailState.loaded ? null : loadEmailTemplates()])
+  mailUi.loading = Promise.all([serverApi('/api/next-steps'), emailState.loaded ? null : loadEmailTemplates(), groupState.loaded ? null : loadGroups()])
     .then(([steps]) => { mailUi.steps = steps; mailUi.error = ''; })
     .catch((err) => { mailUi.error = err.message; })
     .finally(() => { mailUi.loading = null; if (el.isConnected && location.hash.startsWith('#/pipeline')) render(el); });
@@ -38,6 +39,14 @@ const infoOf = (x) => (mailUi.steps ? (x.c ? mailUi.steps.customers[x.c.id] : ma
 const emailOf = (x) => (x.c ? x.c.email : x.p.email);
 const optedOut = (x) => (x.c ? !!x.c.crm.optOut : !!x.p.opt_out);
 
+/** Another centre in the same group that already orders from us, if any. */
+function sisterStocking(x) {
+  const g = x.c ? groupOfCustomer(x.c.id) : groupOfProspect(x.p.id);
+  if (!g) return null;
+  const site = g.customers.find((m) => m.customerId !== (x.c && x.c.id) && (state.customers.get(m.customerId) || {}).numberOfOrders > 0);
+  return site ? { group: g, name: site.siteName || label(state.customers.get(site.customerId)) } : null;
+}
+
 /** The suggested next email for a card: a template key, or '' for none. */
 function suggest(x, tpl, now = Date.now()) {
   const i = infoOf(x);
@@ -48,12 +57,13 @@ function suggest(x, tpl, now = Date.now()) {
   if (i.lastIn && (!i.lastOut || i.lastIn > i.lastOut)) return ''; // they wrote last: answer in the thread
   // The intro sequence: intro or re-intro, then follow-up 1, then 2.
   const chase = () => {
-    if (i.lastKey === 'intro' || i.lastKey === 'reintro') return since >= ((tpl.get('followup-1') || {}).delayDays || 4) ? has('followup-1') : '';
+    if (i.lastKey === 'intro' || i.lastKey === 'reintro' || i.lastKey === 'sister-site') return since >= ((tpl.get('followup-1') || {}).delayDays || 4) ? has('followup-1') : '';
     if (i.lastKey === 'followup-1') return since >= 5 ? has('followup-2') : '';
     if (i.lastKey === 'followup-2') return '';
     return null;
   };
-  const firstTouch = x.p ? (x.p.template === 'reintro' ? 'reintro' : 'intro') : 'intro';
+  // A sister centre already stocks us: lead with that.
+  const firstTouch = sisterStocking(x) && tpl.has('sister-site') ? 'sister-site' : x.p ? (x.p.template === 'reintro' ? 'reintro' : 'intro') : 'intro';
   switch (stage) {
     case 'Prospect': { const c = chase(); return c !== null ? c : has(firstTouch); }
     case 'Contacted': { const c = chase(); return c !== null ? c : has(x.p ? firstTouch : 'reintro'); }
@@ -161,11 +171,18 @@ function prospectCard(x, tpl) {
       </div>
       ${nextEmail(x, tpl)}
       <div class="deal__foot">
-        <span class="row" style="gap:4px"><span class="badge" title="Not in Shopify until they reply">Prospect</span></span>
+        <span class="row" style="gap:4px"><span class="badge" title="Not in Shopify until they reply">Prospect</span>${groupBadge(x)}</span>
         <label class="deal__move"><span class="visually-hidden">Move ${p.company} to</span>
           <select class="select input--sm" data-pmove="${p.id}">${PROSPECT_STAGES.map((s) => html`<option ${s === p.stage ? raw('selected') : ''}>${s}</option>`)}</select></label>
       </div>
     </article>`;
+}
+
+function groupBadge(x) {
+  const g = x.c ? groupOfCustomer(x.c.id) : groupOfProspect(x.p.id);
+  if (!g) return '';
+  const sis = sisterStocking(x);
+  return html`<a class="badge" href="#/groups/${g.id}" title="${sis ? `${sis.name} already stocks us` : `Part of ${g.name}`}">${icon('building-2', 'i--sm')}${g.name}</a>`;
 }
 
 function card(x, today, tpl) {
@@ -186,6 +203,7 @@ function card(x, today, tpl) {
         <span class="row" style="gap:4px">
           ${st.guessed ? html`<span class="badge" title="Not set yet: guessed from their orders">Suggested</span>` : ''}
           ${isKeyAccount(c) ? html`<span class="badge badge--accent">Key account</span>` : ''}
+          ${groupBadge(x)}
           ${days != null ? html`<span class="small muted" title="Days in this stage">${days}d</span>` : ''}
         </span>
         <label class="deal__move"><span class="visually-hidden">Move ${label(c)} to</span>
