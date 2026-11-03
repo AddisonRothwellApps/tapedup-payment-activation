@@ -383,6 +383,15 @@ button { font: inherit; }
 .deal__next .select { min-height: 30px; padding: 4px 8px; font-size: var(--text-2xs); }
 .board__bulk { margin-top: 10px; width: 100%; justify-content: center; }
 .deal__move .select { min-height: 30px; padding: 4px 8px; font-size: var(--text-2xs); max-width: 140px; }
+/* Cards never grow wider than their column: long names and badges shrink instead. */
+.board__col, .board__cards, .deal, .deal__next, .deal__foot > * { min-width: 0; }
+.board__col, .board__cards { grid-template-columns: minmax(0, 1fr); }
+.deal__foot { flex-wrap: wrap; }
+.deal__foot .row { flex-wrap: wrap; min-width: 0; }
+.deal__next .select { width: 100%; max-width: 100%; text-overflow: ellipsis; }
+.deal__name, .deal__sub { overflow-wrap: anywhere; }
+.deal__group { max-width: 150px; text-decoration: none; }
+.deal__group > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 900px) { .board { grid-auto-columns: 82vw; } }
 .nav__signout { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
 .nav__signout .btn { color: rgba(255,255,255,.82); } .nav__signout .btn:hover { background: rgba(255,255,255,.08); color: #fff; }

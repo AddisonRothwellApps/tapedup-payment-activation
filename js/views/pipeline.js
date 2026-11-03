@@ -182,7 +182,7 @@ function groupBadge(x) {
   const g = x.c ? groupOfCustomer(x.c.id) : groupOfProspect(x.p.id);
   if (!g) return '';
   const sis = sisterStocking(x);
-  return html`<a class="badge" href="#/groups/${g.id}" title="${sis ? `${sis.name} already stocks us` : `Part of ${g.name}`}">${icon('building-2', 'i--sm')}${g.name}</a>`;
+  return html`<a class="badge deal__group" href="#/groups/${g.id}" title="${sis ? `${g.name}: ${sis.name} already stocks us` : `Part of ${g.name}`}">${icon('building-2', 'i--sm')}<span>${g.name}</span></a>`;
 }
 
 function card(x, today, tpl) {
