@@ -95,7 +95,8 @@ export function render(el) {
           <li><strong>A reply arrives.</strong> The agent reads it, adds a one-line summary to their timeline, puts the free sample order straight through when they ask for samples and give an address (it flags the reply to you if it can't, say they've already had one), and saves any "try us in March" date as a follow-up. "Not now" and "not interested" move their stage.</li>
           <li><strong>It drafts an answer</strong> in the same thread, with a note on what it read. You approve, edit or reject it in the Outbox.</li>
           <li><strong>No answer?</strong> Follow-up 1 and 2 go out after each template's delay, then they move to Not now. A sample check-in follows a few days after each sample order.</li>
-          <li><strong>Answers come from the knowledge base.</strong> It quotes prices and offers exactly as written there and flags anything it doesn't cover. Trade accounts and payment terms stay with you.</li>
+          <li><strong>Answers come from the knowledge base.</strong> It quotes prices and offers exactly as written there and flags anything it doesn't cover. Payment terms stay with you.</li>
+          <li><strong>A yes to the starter offer</strong> ("let's do it", "set us up"): it opens their trade account, adds the starter offer and drafts one "you're all set" email from the Account ready template, tailored to their reply.</li>
         </ol>
       </section>
     </div>`);
