@@ -96,6 +96,7 @@ function openEditor(el, existing) {
         <label class="field"><span>Pipeline stage</span><select class="select" data-f="stage">${PIPELINE.map((p) => html`<option ${p.key === t.stage ? raw('selected') : ''}>${p.key}</option>`)}</select></label>
       </div>
       <label class="field"><span>Subject</span><input class="input" data-f="subject" value="${t.subject}"></label>
+      <label class="field"><span>Preview text (optional)</span><input class="input" data-f="preview" value="${t.preview || ''}" placeholder="The grey line inboxes show after the subject"></label>
       <label class="field"><span>Email</span><textarea class="textarea" data-f="body" rows="12" style="font-family:var(--font-body);line-height:1.55">${t.body}</textarea></label>
       <div class="row row--wrap" style="gap:6px"><span class="small muted">Insert:</span>${FIELDS.map(([k, name]) => html`<button type="button" class="btn btn--ghost btn--sm" data-insert="${k}" title="${name}" style="text-transform:none;letter-spacing:0">{${k}}</button>`)}</div>
       <p class="small muted" style="margin:0" data-unknown></p>
@@ -110,7 +111,7 @@ function openEditor(el, existing) {
           <option value="auto" ${t.approval === 'auto' ? raw('selected') : ''}>Agent may send it (when auto-send is on)</option></select></label>
       </div>
       <label class="check"><input type="checkbox" data-f="firstTouch" ${t.firstTouch ? raw('checked') : ''}><span><span class="strong">Starts a new conversation</span><br><span class="muted small">Sent as a new email rather than a reply, and counts against the daily limit for new conversations.</span></span></label>
-      <label class="check"><input type="checkbox" data-f="optOut" ${t.optOut ?? t.firstTouch ? raw('checked') : ''}><span><span class="strong">Add the TapedUp Limited line with an unsubscribe link</span><br><span class="muted small">Keep this on for anyone who isn't a customer yet.</span></span></label>
+      <label class="check"><input type="checkbox" data-f="optOut" ${t.optOut ?? t.firstTouch ? raw('checked') : ''}><span><span class="strong">Add the TapedUp Limited line with "reply STOP to opt out"</span><br><span class="muted small">Keep this on for anyone who isn't a customer yet.</span></span></label>
       <label class="check"><input type="checkbox" data-f="active" ${t.active !== false ? raw('checked') : ''}><span><span class="strong">In use</span></span></label>
 
       <section class="card" style="background:var(--surface-subtle)">
@@ -124,7 +125,7 @@ function openEditor(el, existing) {
     onMount: (d) => {
       const read = () => {
         const v = Object.fromEntries(d.$$('[data-f]').map((i) => [i.dataset.f, i.type === 'checkbox' ? i.checked : i.value]));
-        return { ...t, ...v, name: v.name.trim(), subject: v.subject.trim(), body: v.body.replace(/\s+$/, ''), delayDays: Math.max(0, Number(v.delayDays) || 0) };
+        return { ...t, ...v, name: v.name.trim(), subject: v.subject.trim(), preview: String(v.preview || '').trim(), body: v.body.replace(/\s+$/, ''), delayDays: Math.max(0, Number(v.delayDays) || 0) };
       };
       const body = d.$('[data-f="body"]');
       const unknown = d.$('[data-unknown]');
