@@ -19,6 +19,10 @@ export const FIELDS = [
   ['last_order_date', 'Last order date'],
   ['usual_tapes', 'Usual tapes'],
   ['sender_name', 'Your first name'],
+  ['group_name', 'Group (several centres)'],
+  ['site_name', 'Centre name in its group'],
+  ['sister_site', 'Sister centre that stocks us'],
+  ['sister_sites', 'Sister centres that stock us'],
 ];
 
 export const TONES = [
@@ -44,6 +48,20 @@ export const DEFAULT_SET = {
 Fancy a free sample pack for {gym_name}? No catch, no invoice. Just reply with your address and I'll get it in the post this week.
 
 If your climbers get on with it, we do trade prices for gyms and shops. It tends to sell itself off the counter, mostly because everyone asks where you got it.
+
+Cheers,`,
+    },
+    {
+      key: 'sister-site', name: 'Intro: a sister centre already stocks us', stage: 'Prospect', firstTouch: true, optOut: true, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
+      subject: 'Climbing tape for {gym_name}',
+      preview: 'The team at {sister_site} already stock it. Fancy a free sample pack?',
+      body: `Hi {first_name|there},
+
+{sender_name} here from TapedUp. We make printed zinc oxide climbing tape, and the team at {sister_site} already stock it on their counter.
+
+Thought {gym_name} might want in too. Fancy a free sample pack? No catch, no invoice. Just reply with your address and I'll get it in the post this week.
+
+If your climbers get on with it, we'll set you up with a trade account, same as {sister_site}.
 
 Cheers,`,
     },

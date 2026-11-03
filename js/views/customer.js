@@ -12,6 +12,7 @@ import { TRADE_SERVER } from '../env.js';
 import { samplesCardShell, mountSamplesCard } from './samples-card.js';
 import { ensureForm, saveBar, detailsFormCard, mountDetailsForm } from './customer-form.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
+import { groupCardShell, mountGroupCard } from './groups.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
 const expanded = new Set();
@@ -121,6 +122,8 @@ export function render(el, numericId) {
 
           ${quickActions(c)}
 
+          ${groupCardShell()}
+
           <section class="card">
             <div class="card__head"><h2 class="h2">Starter offer</h2>${offerState ? offerStatusChip(offerState) : ''}</div>
             ${c.offer ? html`
@@ -156,6 +159,7 @@ export function render(el, numericId) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
   mountSamplesCard(el.querySelector('[data-samples-card]'), c);
+  mountGroupCard(el.querySelector('[data-group-card]'), c);
   mountDetailsForm(el, c, () => render(el, numericId));
   mountEmailCard(el.querySelector('[data-email-card]'), c);
   mountDraftPicker(el.querySelector('[data-draft-picker]'), c);

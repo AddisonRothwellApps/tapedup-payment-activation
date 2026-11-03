@@ -1,10 +1,11 @@
 // Prospects: the outreach list. Import the prospects CSV (from the Notion
 // clean-up spreadsheet), fix missing emails, then draft intros in bulk.
 // Every draft waits in the Outbox for approval, so nothing goes out from here.
-import { html, raw, icon, ago, toast, openDrawer, busy, loadingBlock } from '../ui.js';
+import { html, raw, icon, ago, toast, openDrawer, busy, armed, loadingBlock } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { prospectState, loadProspects, updateProspect } from '../prospects.js';
 import { TRADE_SERVER } from '../env.js';
+import { groupState, loadGroups, groupById, createGroup, addSite, removeSite } from '../groups.js';
 
 const ui = { q: '', filter: 'ready', selected: new Set() };
 const FILTERS = [
@@ -17,7 +18,7 @@ const FILTERS = [
 
 function matches(p) {
   const q = ui.q.trim().toLowerCase();
-  if (q && ![p.company, p.contact, p.email, p.city].some((v) => String(v || '').toLowerCase().includes(q))) return false;
+  if (q && ![p.company, p.contact, p.email, p.city, p.group_id && (groupById(p.group_id) || {}).name].some((v) => String(v || '').toLowerCase().includes(q))) return false;
   switch (ui.filter) {
     case 'ready': return !!p.email && !p.opt_out && p.stage === 'Prospect' && !p.waiting;
     case 'no-email': return !p.email && !['Lost'].includes(p.stage);
@@ -33,6 +34,7 @@ export function render(el) {
       <div class="card"><p class="muted" style="margin:0">Prospects and outreach are at <a href="${TRADE_SERVER}/#/prospects" target="_blank" rel="noopener">trade.tapedup.co.uk</a>.</p></div></div>`);
     return;
   }
+  if (!groupState.loaded && !groupState.loading && !groupState.error) loadGroups().then(() => { if (el.isConnected && location.hash.startsWith('#/prospects')) render(el); });
   if (!prospectState.loaded) {
     el.innerHTML = String(html`<div class="page">${prospectState.error ? html`<div class="notice notice--err">${icon('circle-alert')}<div>${prospectState.error}</div></div>` : loadingBlock('Loading prospects…')}</div>`);
     if (!prospectState.error) loadProspects().then(() => { if (location.hash.startsWith('#/prospects')) render(el); });
@@ -65,7 +67,7 @@ export function render(el) {
           <th>Company</th><th>Email</th><th>Town</th><th>Template</th><th>Priority</th><th>Stage</th><th></th></tr></thead>
         <tbody>${list.slice(0, 400).map((p) => html`<tr>
           <td>${p.email && !p.opt_out ? html`<input type="checkbox" data-sel="${p.id}" aria-label="Select ${p.company}" ${ui.selected.has(p.id) ? raw('checked') : ''}>` : ''}</td>
-          <td><div class="strong">${p.company}</div><div class="small muted">${p.contact || ''}${p.contact && p.notion_url ? ' · ' : ''}${p.notion_url ? html`<a href="${p.notion_url}" target="_blank" rel="noopener">Notion</a>` : ''}</div></td>
+          <td><div class="strong">${p.company}</div><div class="small muted">${p.group_id && groupById(p.group_id) ? html`<a href="#/groups/${p.group_id}" title="Part of a group">${icon('building-2', 'i--sm')}${groupById(p.group_id).name}</a>${p.contact || p.notion_url ? ' · ' : ''}` : ''}${p.contact || ''}${p.contact && p.notion_url ? ' · ' : ''}${p.notion_url ? html`<a href="${p.notion_url}" target="_blank" rel="noopener">Notion</a>` : ''}</div></td>
           <td class="small">${p.email || html`<span class="status status--due">No email</span>`}</td>
           <td class="small">${p.city || ''}</td>
           <td class="small">${p.template === 'reintro' ? 'Re-introduction' : 'Intro'}</td>
@@ -140,14 +142,66 @@ function openEdit(p, done) {
           <option value="reintro" ${p.template === 'reintro' ? raw('selected') : ''}>Re-introduction (spoke before)</option></select></label>
         <label class="field"><span>Stage</span><select class="select" data-p="stage">${['Prospect', 'Contacted', 'Not now', 'Lost'].map((s) => html`<option ${s === p.stage ? raw('selected') : ''}>${s}</option>`)}</select></label>
       </div>
+      <div class="form-row">
+        <label class="field"><span>Group (business with several centres)</span><select class="select" data-group>
+          <option value="">Not in a group</option>${groupState.list.map((g) => html`<option value="${g.id}" ${Number(p.group_id) === g.id ? raw('selected') : ''}>${g.name}</option>`)}<option value="new">New group…</option></select></label>
+        <label class="field"><span>Centre name in the group</span><input class="input" data-site value="${p.site_name || ''}" placeholder="${p.company}"></label>
+      </div>
+      <label class="field" data-newwrap hidden><span>New group name</span><input class="input" data-newname placeholder="e.g. The Climbing Academy"></label>
       <label class="field"><span>Notes</span><textarea class="textarea" data-p="notes">${p.notes || ''}</textarea></label>
       ${p.opt_out ? html`<div class="notice notice--warn">${icon('circle-alert')}<div>Opted out of email. Nothing will be sent to them.</div></div>` : ''}
     </div>`,
-    foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save</button>`,
-    onMount: (d) => d.$('[data-save]').addEventListener('click', (e) => {
-      const patch = Object.fromEntries(d.$$('[data-p]').map((i) => [i.dataset.p, i.value.trim()]));
-      if (!patch.email) delete patch.email;
-      busy(e.currentTarget, () => updateProspect(p.id, patch)).then(() => { toast('Saved'); d.close(); done(); }).catch(() => {});
-    }),
+    foot: html`<button class="btn btn--ghost" data-merge>${icon('merge', 'i--sm')}Merge with…</button><button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save</button>`,
+    onMount: (d) => {
+      const sel = d.$('[data-group]');
+      sel.addEventListener('change', () => { d.$('[data-newwrap]').hidden = sel.value !== 'new'; });
+      d.$('[data-merge]').addEventListener('click', () => { d.close(); openMergeProspect(p, done); });
+      d.$('[data-save]').addEventListener('click', (e) => {
+        const patch = Object.fromEntries(d.$$('[data-p]').map((i) => [i.dataset.p, i.value.trim()]));
+        if (!patch.email) delete patch.email;
+        const site = d.$('[data-site]').value.trim();
+        busy(e.currentTarget, async () => {
+          await updateProspect(p.id, patch);
+          let gid = sel.value;
+          if (gid === 'new') {
+            const name = d.$('[data-newname]').value.trim();
+            if (!name) throw new Error('Give the new group a name');
+            gid = String((await createGroup(name)).id);
+          }
+          if (gid && (Number(gid) !== Number(p.group_id) || site !== (p.site_name || ''))) await addSite(Number(gid), { prospectId: p.id, siteName: site });
+          else if (!gid && p.group_id) await removeSite({ prospectId: p.id });
+          if (gid !== String(p.group_id || '') || site !== (p.site_name || '')) await loadProspects({ force: true });
+        }).then(() => { toast('Saved'); d.close(); done(); }).catch(() => {});
+      });
+    },
+  });
+}
+
+/** Two prospects for the same centre: this one stays, the other's email becomes an extra address on it. */
+function openMergeProspect(p, done) {
+  const others = prospectState.items.filter((x) => x.id !== p.id && !x.customer_id);
+  const domain = String(p.email || '').split('@')[1] || '';
+  openDrawer({
+    eyebrow: p.company, title: 'Merge with another prospect', wide: true,
+    body: html`<div class="form">
+      <p class="muted small" style="margin:0">For the same centre listed twice. <strong>${p.company}</strong>${p.email ? ` (${p.email})` : ''} stays, with its email as the main one. The other prospect's email becomes an extra address here (so replies from it still land here), and its emails, notes and details move across. Different centres of one business belong in a group instead.</p>
+      <input class="input" type="search" data-q placeholder="Search prospects" value="${domain && !/^(gmail|hotmail|outlook|yahoo|icloud|btinternet)\./.test(domain) ? domain : p.company.split(/\s+/)[0]}">
+      <div class="list" data-results></div>
+    </div>`,
+    foot: html`<button class="btn btn--ghost" data-close>Cancel</button>`,
+    onMount(d) {
+      const q = d.$('[data-q]');
+      const draw = () => {
+        const term = q.value.trim().toLowerCase();
+        const hits = others.filter((x) => !term || [x.company, x.email, x.city].some((v) => String(v || '').toLowerCase().includes(term))).slice(0, 30);
+        d.$('[data-results]').innerHTML = String(hits.length ? html`${hits.map((x) => html`<div class="list__item">
+          <span class="list__main"><span class="strong">${x.company}</span><span class="small muted">${[x.email || 'No email', x.stage, x.city].filter(Boolean).join(' · ')}</span></span>
+          <button class="btn btn--sm btn--outline" data-pick="${x.id}">Merge into ${p.company}</button></div>`)}` : html`<p class="muted small" style="margin:8px 0">No prospects match.</p>`);
+        d.$$('[data-pick]').forEach((b) => armed(b, () => busy(b, () => serverApi('/api/prospects/merge', { method: 'POST', body: { keepId: p.id, mergeId: Number(b.dataset.pick) } }))
+          .then(async () => { toast('Merged'); d.close(); await loadProspects({ force: true }); done(); }).catch(() => {}), 'Click again to merge'));
+      };
+      q.addEventListener('input', draw);
+      draw();
+    },
   });
 }

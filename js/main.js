@@ -14,6 +14,7 @@ import * as agent from './views/agent.js';
 import * as knowledge from './views/knowledge.js';
 import * as templates from './views/templates.js';
 import * as customer from './views/customer.js';
+import * as groups from './views/groups.js';
 import * as orders from './views/orders.js';
 import * as offers from './views/offers.js';
 import * as followups from './views/followups.js';
@@ -25,6 +26,7 @@ const NAV = [
   { key: 'pipeline', href: '#/pipeline', label: 'Pipeline', icon: 'square-kanban' },
   { key: 'prospects', href: '#/prospects', label: 'Prospects', icon: 'target' },
   { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
+  { key: 'groups', href: '#/groups', label: 'Groups', icon: 'building-2' },
   { key: 'outbox', href: '#/outbox', label: 'Outbox', icon: 'inbox' },
   { key: 'templates', href: '#/templates', label: 'Email templates', icon: 'mail' },
   { key: 'agent', href: '#/agent', label: 'Agent', icon: 'sparkles' },
@@ -41,6 +43,8 @@ const ROUTES = [
   { nav: 'prospects', re: /^\/prospects$/, view: prospects },
   { nav: 'customers', re: /^\/customers$/, view: customers },
   { nav: 'customers', re: /^\/customers\/(\d+)$/, view: customer },
+  { nav: 'groups', re: /^\/groups$/, view: groups },
+  { nav: 'groups', re: /^\/groups\/(\d+)$/, view: groups },
   { nav: 'outbox', re: /^\/outbox$/, view: outbox },
   { nav: 'templates', re: /^\/templates$/, view: templates },
   { nav: 'agent', re: /^\/agent$/, view: agent },
