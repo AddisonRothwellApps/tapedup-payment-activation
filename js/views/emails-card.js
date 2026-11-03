@@ -87,7 +87,7 @@ function openEditor(c, data, legacy, done) {
   });
 }
 
-function openMerge(c, data) {
+export function openMerge(c, data) {
   const pick = { kind: null, item: null, preview: null };
   openDrawer({
     title: `Merge into ${label(c)}`, eyebrow: 'Duplicate accounts', wide: true,

@@ -10,7 +10,7 @@ import { emailCardShell, mountEmailCard, draftPickerShell, mountDraftPicker } fr
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { TRADE_SERVER } from '../env.js';
 import { samplesCardShell, mountSamplesCard } from './samples-card.js';
-import { emailsCardShell, mountEmailsCard } from './emails-card.js';
+import { ensureForm, saveBar, detailsFormCard, mountDetailsForm } from './customer-form.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
@@ -19,10 +19,6 @@ const expanded = new Set();
 const more = { id: null, orders: false, log: false };
 const FIRST = 5;
 
-/** The saved address as one line: typed text, or the parts the agent saved from an email. */
-const addressText = (a) => (a && typeof a === 'object'
-  ? [a.company, a.address1, a.address2, a.city, a.zip].map((x) => String(x || '').trim()).filter(Boolean).join(', ')
-  : String(a || ''));
 
 export function render(el, numericId) {
   const c = state.byNumericId.get(numericId);
@@ -32,6 +28,7 @@ export function render(el, numericId) {
     return;
   }
   if (more.id !== c.id) Object.assign(more, { id: c.id, orders: false, log: false });
+  ensureForm(c);
   const s = insights(c);
   const allOrders = state.ordersByCustomer.get(c.numericId) || [];
   const offerState = offerStatus(c);
@@ -48,6 +45,7 @@ export function render(el, numericId) {
 
   el.innerHTML = String(html`
     <div class="page">
+      ${saveBar()}
       <a class="back" href="#/customers">${icon('arrow-left', 'i--sm')}Customers</a>
       <div class="page-head">
         <div style="min-width:0">
@@ -119,9 +117,9 @@ export function render(el, numericId) {
         </div>
 
         <div class="stack">
-          ${quickActions(c)}
+          ${detailsFormCard(c)}
 
-          ${detailsCard(c, contacted)}
+          ${quickActions(c)}
 
           <section class="card">
             <div class="card__head"><h2 class="h2">Starter offer</h2>${offerState ? offerStatusChip(offerState) : ''}</div>
@@ -141,20 +139,8 @@ export function render(el, numericId) {
               <button class="btn btn--accent btn--sm" data-offer-give>${icon('gift', 'i--sm')}${tpl ? `Give ${tpl.name}` : 'Give a starter offer'}</button>`}
           </section>
 
-          <section class="card">
-            <div class="card__head"><h2 class="h2">Account</h2></div>
-            <div class="form">
-              <label class="check"><input type="checkbox" data-tag="${TAGS.dealer}" ${isDealer(c) ? raw('checked') : ''}><span><span class="strong">Trade account</span><br><span class="muted small">Trade pricing, B2B shipping and the dealer area (tag "${TAGS.dealer}")</span></span></label>
-              <label class="check"><input type="checkbox" data-tag="${TAGS.terms}" ${isTerms(c) ? raw('checked') : ''}><span><span class="strong">Pays on terms</span><br><span class="muted small">Can order now, pay by invoice (tag "${TAGS.terms}")</span></span></label>
-              <label class="field"><span>Pipeline stage</span><select class="select" data-stage>${(() => { const cur = stageOf(c); return html`${cur.guessed ? html`<option value="" selected>Not set (looks like ${cur.stage})</option>` : ''}${STAGES.map((st) => html`<option ${!cur.guessed && cur.stage === st ? raw('selected') : ''}>${st}</option>`)}`; })()}</select></label>
-              <label class="field"><span>Note (also shown in Shopify)</span><textarea class="textarea" data-note>${c.note}</textarea></label>
-              <button class="btn btn--outline btn--sm" data-save-note style="justify-self:start">Save note</button>
-            </div>
-          </section>
-
           ${samplesCardShell()}
 
-          ${emailsCardShell()}
 
           <section class="card">
             <div class="card__head"><h2 class="h2">Remove or delete</h2></div>
@@ -170,7 +156,7 @@ export function render(el, numericId) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
   mountSamplesCard(el.querySelector('[data-samples-card]'), c);
-  mountEmailsCard(el.querySelector('[data-emails-card]'), c);
+  mountDetailsForm(el, c, () => render(el, numericId));
   mountEmailCard(el.querySelector('[data-email-card]'), c);
   mountDraftPicker(el.querySelector('[data-draft-picker]'), c);
   el.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', () => { more[b.dataset.more] = !more[b.dataset.more]; render(el, numericId); }));
@@ -178,7 +164,6 @@ export function render(el, numericId) {
   const rm = el.querySelector('[data-remove]');
   if (rm) rm.addEventListener('click', () => openRemove(c));
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
-  el.querySelector('[data-edit-details]').addEventListener('click', () => openDetailsDrawer(c));
 
   el.querySelectorAll('[data-order]').forEach((tr) => tr.addEventListener('click', () => {
     if (expanded.has(tr.dataset.order)) expanded.delete(tr.dataset.order); else expanded.add(tr.dataset.order);
@@ -192,21 +177,6 @@ export function render(el, numericId) {
   const remove = el.querySelector('[data-offer-remove]');
   if (remove) armed(remove, () => busy(remove, () => removeOffer(c)).then(() => toast('Starter offer removed')).catch(() => {}), 'Click again to remove');
 
-  el.querySelectorAll('[data-tag]').forEach((cb) => cb.addEventListener('change', () => {
-    const on = cb.checked;
-    const what = cb.dataset.tag === TAGS.dealer ? 'Trade account' : 'Pays on terms';
-    busy(cb, () => setTag(c, cb.dataset.tag, on, `${what} turned ${on ? 'on' : 'off'}`))
-      .then(() => toast(`${what} ${on ? 'on' : 'off'} for ${label(c)}`))
-      .catch(() => { cb.checked = !on; });
-  }));
-  el.querySelector('[data-stage]').addEventListener('change', (e) => {
-    const stage = e.target.value;
-    busy(e.target, () => setStage(c, stage)).then(() => toast(stage ? `Moved to ${stage}` : 'Stage cleared')).catch(() => {});
-  });
-  el.querySelector('[data-save-note]').addEventListener('click', (e) => {
-    const note = el.querySelector('[data-note]').value;
-    busy(e.currentTarget, () => saveNote(c, note)).then(() => toast('Note saved')).catch(() => {});
-  });
   el.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', () => busy(b, () => updateLog(c, b.dataset.done, { done: true })).then(() => toast('Follow-up done')).catch(() => {})));
   el.querySelectorAll('[data-del]').forEach((b) => armed(b, () => busy(b, () => deleteLog(c, b.dataset.del)).then(() => toast('Deleted')).catch(() => {}), 'Delete?'));
 }
@@ -251,57 +221,6 @@ function openRemove(c) {
             location.hash = '#/customers';
           }).catch(() => {});
       }, 'Click again to confirm');
-    },
-  });
-}
-
-function detailsCard(c, contacted) {
-  const p = c.crm.profile;
-  const rows = [
-    ['Company', c.company],
-    ['Contact', c.contact || (c.name !== c.email && c.name !== c.company ? c.name : '')],
-    ['Email', c.email],
-    ['Phone', c.phone],
-    ['Address', addressText(p.address)],
-    ['Last contact', contacted ? `${fmtDate(contacted)} (${ago(contacted)})` : ''],
-  ].filter(([, v]) => v);
-  return html`<section class="card">
-    <div class="card__head"><h2 class="h2">Details</h2><button class="btn btn--ghost btn--sm" data-edit-details>${icon('pencil', 'i--sm')}Edit</button></div>
-    ${rows.length ? html`<dl class="details">${rows.map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)}</dl>` : html`<p class="muted small" style="margin:0">No details yet.</p>`}
-    ${(p.labels || []).length ? html`<div class="row row--wrap" style="gap:6px;margin-top:12px">${p.labels.map((l) => html`<span class="badge">${l}</span>`)}</div>` : ''}
-    ${p.notionId ? html`<p class="faint small" style="margin:12px 0 0">Brought over from Notion</p>` : ''}
-  </section>`;
-}
-
-/** Edits the CRM profile. The email and phone they sign in with stay in Shopify; these are for you. */
-function openDetailsDrawer(c) {
-  const p = c.crm.profile;
-  const field = (key, text, value, attrs = '') => html`<label class="field"><span>${text}</span><input class="input" data-p="${key}" value="${value || ''}" ${raw(attrs)} autocomplete="off"></label>`;
-  openDrawer({
-    eyebrow: label(c),
-    title: 'Edit details',
-    body: html`<form class="form" onsubmit="return false">
-      ${field('company', 'Company / gym', c.company)}
-      ${field('contact', 'Contact', c.contact, 'placeholder="Who you deal with"')}
-      ${field('phone', 'Phone', p.phone || c.phone, 'type="tel"')}
-      <label class="field"><span>Address</span><textarea class="textarea" data-p="address" rows="2">${addressText(p.address)}</textarea></label>
-      <label class="field"><span>Last contacted</span><input class="input" type="date" data-p="lastContacted" value="${(p.lastContacted || '').slice(0, 10)}" max="${todayISO()}"></label>
-      <label class="check"><input type="checkbox" data-visited ${(p.labels || []).includes('Visited') ? raw('checked') : ''}><span>Visited in person</span></label>
-      <p class="muted small" style="margin:0">Logging a call, email or visit updates "last contact" by itself. Email addresses (main, secondary and finance) are edited in the Email addresses card.</p>
-    </form>`,
-    foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save</button>`,
-    onMount(api) {
-      api.$('[data-save]').addEventListener('click', (e) => {
-        const v = (k) => api.$(`[data-p="${k}"]`).value.trim();
-        const labels = (p.labels || []).filter((l) => l !== 'Visited');
-        if (api.$('[data-visited]').checked) labels.push('Visited');
-        const patch = {
-          company: v('company'), contact: v('contact'), phone: v('phone'),
-          address: v('address'), lastContacted: v('lastContacted'), labels,
-        };
-        if (!patch.company) { toast('Add the company name', 'err'); return; }
-        busy(e.currentTarget, () => saveProfile(c, patch)).then(() => { toast('Details saved'); api.close(); }).catch(() => {});
-      });
     },
   });
 }

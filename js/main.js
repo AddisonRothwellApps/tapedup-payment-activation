@@ -4,6 +4,7 @@
 import { state, subscribe, loadBoot, loadCustomers, loadCachedOrders, syncOrders, followUps, todayISO, hasAllOrders } from './store.js';
 import { html, icon, ago, loadingBlock } from './ui.js';
 import { EMBEDDED } from './env.js';
+import { leaveGuard } from './guard.js';
 import * as dashboard from './views/dashboard.js';
 import * as pipeline from './views/pipeline.js';
 import * as customers from './views/customers.js';
@@ -123,7 +124,14 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-nav-toggle]')) app.classList.toggle('nav-open');
   if (e.target.closest('[data-sync]')) syncOrders();
 });
-window.addEventListener('hashchange', route);
+// Unsaved changes on a screen (e.g. a customer's details) hold you there until you save or discard.
+let lastHash = location.hash;
+window.addEventListener('hashchange', () => {
+  if (leaveGuard.blocked()) { history.replaceState(null, '', lastHash || '#/'); leaveGuard.notify(); return; }
+  lastHash = location.hash;
+  route();
+});
+window.addEventListener('beforeunload', (e) => { if (leaveGuard.blocked()) { e.preventDefault(); e.returnValue = ''; } });
 
 async function start() {
   route();
