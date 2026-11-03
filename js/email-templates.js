@@ -93,18 +93,18 @@ Trade price per 7.5m roll (shelf price in brackets):
 Plain: Black and White
 1.25cm £1.02 (£2.45) · 2.5cm £1.44 (£3.45) · 5cm £2.27 (£5.45)
 
-Colours: Doodle and Caution
+Colours: Doodle and Icons
 1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
 
-Complex colours: Icons
-1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
+Complex colours: Comic
+1.25cm £1.35 (£3.25) · 2.5cm £2.60 (£6.25) · 5cm £3.44 (£8.25)
 
 PRO Rayon
 2 x 0.5cm £1.85 (£4.45) · 3.8cm £3.10 (£7.45)
 
 That's a 50% margin on every roll. We're not VAT registered yet, so there's no VAT on our invoices. No minimum order, and delivery is free over £100.
 
-The easiest way in is our starter offer: 85 rolls across plain, colours, Icons and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
+The easiest way in is our starter offer: 85 rolls across plain, colours, Comic and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
 
 Fancy the starter offer? Just let us know and we'll get it all set up for you. Or try the samples first and I'll check in once they've had a few sessions.
 
@@ -122,18 +122,18 @@ Trade price per 7.5m roll (shelf price in brackets):
 Plain: Black and White
 1.25cm £1.02 (£2.45) · 2.5cm £1.44 (£3.45) · 5cm £2.27 (£5.45)
 
-Colours: Doodle and Caution
+Colours: Doodle and Icons
 1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
 
-Complex colours: Icons
-1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
+Complex colours: Comic
+1.25cm £1.35 (£3.25) · 2.5cm £2.60 (£6.25) · 5cm £3.44 (£8.25)
 
 PRO Rayon
 2 x 0.5cm £1.85 (£4.45) · 3.8cm £3.10 (£7.45)
 
 That's a 50% margin on every roll. We're not VAT registered yet, so there's no VAT on our invoices. No minimum order, and delivery is free over £100.
 
-The easiest way in is our starter offer: 85 rolls across plain, colours, Icons and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
+The easiest way in is our starter offer: 85 rolls across plain, colours, Comic and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
 
 Fancy it? Just let us know and we'll get it all set up for you. Any questions, just reply here.
 
