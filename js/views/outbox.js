@@ -77,8 +77,10 @@ export function render(el) {
               </div>
               ${['pending_approval', 'approved', 'scheduled', 'failed'].includes(item.status) ? html`<div class="row row--wrap" style="gap:6px;justify-content:flex-end">
                 ${item.status === 'pending_approval' ? html`<button class="btn btn--sm" data-approve="${item.id}">${icon('send', 'i--sm')}Approve and send</button>` : ''}
+                ${item.template_key === 'agent-reply' ? html`<button class="btn btn--outline btn--sm" data-retry="${item.id}" title="The agent writes this reply again, using the knowledge base as it is now">${icon('rotate-ccw', 'i--sm')}Try again</button>` : ''}
                 ${item.status !== 'failed' ? html`<button class="btn btn--outline btn--sm" data-editd="${item.id}">${icon('pencil', 'i--sm')}Edit</button>` : ''}
-                <button class="btn btn--ghost btn--sm" data-reject="${item.id}">Reject</button></div>` : ''}
+                <button class="btn btn--ghost btn--sm" data-reject="${item.id}">Reject</button></div>`
+                : item.status === 'rejected' && item.template_key === 'agent-reply' ? html`<button class="btn btn--outline btn--sm" data-retry="${item.id}">${icon('rotate-ccw', 'i--sm')}Try again</button>` : ''}
             </div>
             ${item.agent_note ? html`<div class="notice notice--info" style="margin-bottom:12px">${icon('sparkles')}<div>${item.agent_note}</div></div>` : ''}
             ${item.error ? html`<div class="notice ${item.status === 'failed' ? 'notice--err' : 'notice--info'}" style="margin-bottom:12px">${icon('circle-alert')}<div>${item.error}</div></div>` : ''}
@@ -100,7 +102,30 @@ export function render(el) {
     }).catch(() => {})));
   el.querySelectorAll('[data-reject]').forEach((b) => b.addEventListener('click', () => busy(b, () => serverApi(`/api/outbox/${b.dataset.reject}/reject`, { method: 'POST', body: {} }))
     .then(() => { toast('Rejected'); ui.items = null; render(el); window.dispatchEvent(new Event('outbox-changed')); }).catch(() => {})));
+  el.querySelectorAll('[data-retry]').forEach((b) => b.addEventListener('click', () => openRetry(el, ui.items.find((i) => String(i.id) === b.dataset.retry))));
   el.querySelectorAll('[data-editd]').forEach((b) => b.addEventListener('click', () => openEdit(el, ui.items.find((i) => String(i.id) === b.dataset.editd))));
+}
+
+/** The agent writes the reply again from the same email: after a knowledge base fix, or with a note on what to change. */
+function openRetry(el, item) {
+  openDrawer({
+    title: 'Try again', eyebrow: `Reply to ${item.customer_name || item.to_address}`,
+    body: html`<div class="form">
+      <p class="muted small" style="margin:0">The agent rewrites this reply from their email, using the knowledge base as it is now. Nothing else is repeated: no second sample order or account changes. The new draft replaces this one and waits here for approval.</p>
+      <label class="field"><span>Anything it should do differently? (optional)</span><textarea class="textarea" data-note rows="4" placeholder="e.g. Shorter, and mention the free display stand"></textarea>
+        <span class="muted small">Leave it blank if you've just fixed the knowledge base.</span></label>
+    </div>`,
+    foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-go>${icon('sparkles', 'i--sm')}Write it again</button>`,
+    onMount: (d) => {
+      d.$('[data-note]').focus();
+      d.$('[data-go]').addEventListener('click', (e) => {
+        e.currentTarget.textContent = 'Writing…';
+        busy(e.currentTarget, () => serverApi('/api/agent/redraft', { method: 'POST', body: { outboxId: item.id, note: d.$('[data-note]').value.trim() } }))
+          .then(() => { toast('New draft ready'); d.close(); ui.tab = 'pending_approval'; ui.items = null; render(el); window.dispatchEvent(new Event('outbox-changed')); })
+          .catch(() => { const b = d.$('[data-go]'); if (b) b.innerHTML = String(html`${icon('sparkles', 'i--sm')}Write it again`); });
+      });
+    },
+  });
 }
 
 function openEdit(el, item) {
