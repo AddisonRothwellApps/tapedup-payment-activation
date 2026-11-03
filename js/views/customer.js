@@ -14,6 +14,11 @@ import { openGiveOffer, offerStatusChip } from './offers.js';
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
 const expanded = new Set();
 
+/** The saved address as one line: typed text, or the parts the agent saved from an email. */
+const addressText = (a) => (a && typeof a === 'object'
+  ? [a.company, a.address1, a.address2, a.city, a.zip].map((x) => String(x || '').trim()).filter(Boolean).join(', ')
+  : String(a || ''));
+
 export function render(el, numericId) {
   const c = state.byNumericId.get(numericId);
   if (!c) {
@@ -200,7 +205,7 @@ function detailsCard(c, contacted) {
     ['Other emails', (p.otherEmails || []).join(', ')],
     ['Finance email', p.financeEmail],
     ['Phone', c.phone],
-    ['Address', p.address],
+    ['Address', addressText(p.address)],
     ['Last contact', contacted ? `${fmtDate(contacted)} (${ago(contacted)})` : ''],
   ].filter(([, v]) => v);
   return html`<section class="card">
@@ -223,7 +228,7 @@ function openDetailsDrawer(c) {
       ${field('contact', 'Contact', c.contact, 'placeholder="Who you deal with"')}
       <div class="form-row">${field('phone', 'Phone', p.phone || c.phone, 'type="tel"')}${field('financeEmail', 'Finance email', p.financeEmail, 'type="email"')}</div>
       ${field('otherEmails', 'Other emails', (p.otherEmails || []).join(', '), 'placeholder="Separate with commas"')}
-      <label class="field"><span>Address</span><textarea class="textarea" data-p="address" rows="2">${p.address || ''}</textarea></label>
+      <label class="field"><span>Address</span><textarea class="textarea" data-p="address" rows="2">${addressText(p.address)}</textarea></label>
       <label class="field"><span>Last contacted</span><input class="input" type="date" data-p="lastContacted" value="${(p.lastContacted || '').slice(0, 10)}" max="${todayISO()}"></label>
       <label class="check"><input type="checkbox" data-visited ${(p.labels || []).includes('Visited') ? raw('checked') : ''}><span>Visited in person</span></label>
       <p class="muted small" style="margin:0">Logging a call, email or visit updates "last contact" by itself. The email and phone they sign in with are changed in Shopify (${c.email || 'no email'}).</p>
