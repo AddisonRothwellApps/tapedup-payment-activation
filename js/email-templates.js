@@ -106,7 +106,7 @@ That's a 50% margin on every roll. We're not VAT registered yet, so there's no V
 
 The easiest way in is our starter offer: 85 rolls across plain, colours, Icons and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
 
-Want the starter offer? Just reply "starter" and I'll open your trade account with it ready at checkout. Or try the samples first and I'll check in once they've had a few sessions.
+Fancy the starter offer? Just let us know and we'll get it all set up for you. Or try the samples first and I'll check in once they've had a few sessions.
 
 Cheers,`,
     },
@@ -135,7 +135,7 @@ That's a 50% margin on every roll. We're not VAT registered yet, so there's no V
 
 The easiest way in is our starter offer: 85 rolls across plain, colours, Icons and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
 
-Want it? Just reply "starter" and I'll open your trade account with the offer ready at checkout. Any questions, reply here.
+Fancy it? Just let us know and we'll get it all set up for you. Any questions, just reply here.
 
 Cheers,`,
     },
