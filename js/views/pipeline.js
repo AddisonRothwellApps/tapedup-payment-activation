@@ -178,6 +178,20 @@ function prospectCard(x, tpl) {
     </article>`;
 }
 
+// Dealers usually reorder about every 3 months: amber from 75 days, red from 90.
+const REORDER_DUE = 75;
+const REORDER_LATE = 90;
+
+/** When they last ordered, coloured by how close they are to their usual 3-monthly reorder. */
+function lastOrderChip(c, contact) {
+  const at = c.lastOrderAt;
+  const tip = contact ? ` · last contact ${ago(contact)}` : '';
+  if (!at) return html`<span class="small muted" title="No orders yet${tip}">${icon('receipt', 'i--sm')}No orders yet</span>`;
+  const days = Math.floor((Date.now() - Date.parse(at)) / DAY);
+  const kind = days >= REORDER_LATE ? 'followup--overdue' : days >= REORDER_DUE ? 'followup--today' : '';
+  return html`<span class="followup ${kind}" title="Last order ${fmtDate(at)}${days >= REORDER_LATE ? ': past their usual 3-monthly reorder' : days >= REORDER_DUE ? ': reorder due soon' : ''}${tip}">${icon('receipt', 'i--sm')}Ordered ${ago(at)}</span>`;
+}
+
 function groupBadge(x) {
   const g = x.c ? groupOfCustomer(x.c.id) : groupOfProspect(x.p.id);
   if (!g) return '';
@@ -195,7 +209,7 @@ function card(x, today, tpl) {
       <div class="deal__sub small muted">${sublabel(c) || c.city || '—'}</div>
       <div class="deal__meta">
         ${due ? html`<span class="followup ${due.kind ? `followup--${due.kind}` : ''}" title="Next follow-up ${fmtDate(next)}">${icon('calendar', 'i--sm')}${due.text}</span>` : ''}
-        ${contact ? html`<span class="small muted" title="Last contact">${icon('message-circle', 'i--sm')}${ago(contact)}</span>` : html`<span class="small muted">No contact logged</span>`}
+        ${lastOrderChip(c, contact)}
         ${c.amountSpent ? html`<span class="small muted" title="Lifetime spend">${money0(c.amountSpent)}</span>` : ''}
       </div>
       ${nextEmail(x, tpl)}
