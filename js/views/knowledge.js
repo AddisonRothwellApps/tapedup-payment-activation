@@ -46,6 +46,7 @@ export function render(el) {
             <button type="button" class="list__item kb-item" data-open="${x.id}">
               <span class="list__main"><span class="strong">${x.title || 'Untitled'}</span>
                 <span class="small muted clip">${String(x.body || '').replace(/\s+/g, ' ').slice(0, 140)}</span></span>
+              ${x.link ? html`<span class="badge" title="${x.link}">${icon('link', 'i--sm')}Link</span>` : ''}
               ${x.active === false ? html`<span class="badge">Off</span>` : html`<span class="badge badge--cyan">Agent uses</span>`}
             </button>`)}</div>
         </section>`) : html`<section class="card empty">${icon('book-open')}<strong class="strong">No articles match</strong></section>`}
@@ -68,6 +69,8 @@ function openEditor(el, article) {
       <label class="field"><span>Title</span><input class="input" data-title value="${x.title}" placeholder="e.g. Delivery times"></label>
       <label class="field"><span>Category</span><input class="input" data-cat value="${x.category || ''}" list="kb-cats">
         <datalist id="kb-cats">${CATEGORIES.map((c) => html`<option value="${c}"></option>`)}</datalist></label>
+      <label class="field"><span>Link (optional)</span><input class="input" type="url" data-link value="${x.link || ''}" placeholder="https://tapedup.co.uk/…">
+        <span class="muted small">The agent may add this link to replies once a conversation has started, never in a first email.</span></label>
       <label class="field"><span>Article</span><textarea class="textarea" data-body rows="14" style="line-height:1.55" placeholder="Write it as plain facts. The agent quotes prices and offers exactly as written.">${x.body}</textarea></label>
       <label class="check"><input type="checkbox" data-active ${x.active !== false ? raw('checked') : ''}><span>The agent uses this article</span></label>
       ${x.updatedAt ? html`<p class="muted small" style="margin:0">Last saved ${ago(x.updatedAt)}</p>` : ''}
@@ -75,8 +78,9 @@ function openEditor(el, article) {
     foot: html`${isNew ? '' : html`<button class="btn btn--ghost" data-del>${icon('trash-2', 'i--sm')}Delete</button>`}<button class="btn" data-save>${icon('check', 'i--sm')}Save article</button>`,
     onMount: (d) => {
       d.$('[data-save]').addEventListener('click', (e) => {
-        const next = { ...x, title: d.$('[data-title]').value.trim(), category: d.$('[data-cat]').value.trim(), body: d.$('[data-body]').value.trim(), active: d.$('[data-active]').checked, updatedAt: new Date().toISOString() };
+        const next = { ...x, title: d.$('[data-title]').value.trim(), category: d.$('[data-cat]').value.trim(), body: d.$('[data-body]').value.trim(), link: d.$('[data-link]').value.trim(), active: d.$('[data-active]').checked, updatedAt: new Date().toISOString() };
         if (!next.title || !next.body) { toast('Give it a title and some text', 'err'); return; }
+        if (next.link && !/^https:\/\/[^\s<>"]+$/.test(next.link)) { toast('The link must be a full web address starting https://', 'err'); return; }
         const list = knowledgeState.articles.filter((y) => y.id !== next.id);
         const at = knowledgeState.articles.findIndex((y) => y.id === next.id);
         list.splice(at >= 0 ? at : list.length, 0, next);

@@ -10,7 +10,7 @@ const KEY = 'knowledge';
 
 export const CATEGORIES = ['Products', 'Pricing', 'Samples', 'Ordering', 'Delivery', 'Company', 'How to reply'];
 
-const a = (id, category, title, body) => ({ id, category, title, body, active: true });
+const a = (id, category, title, body, link = '') => ({ id, category, title, body, link, active: true });
 
 // Starter articles, from what TapedUp has told dealers by email and the
 // current Shopify prices. Edit them on the Knowledge base screen.
@@ -25,7 +25,7 @@ PRO Rayon tape comes in 2 x 0.5cm (two thin rolls) and 3.8cm.`),
 - Complex colours: Comic
 - PRO Rayon
 
-Discontinued: Caution and Bold Bolder. Don't offer or quote them. If someone asks for one, say it has been discontinued and suggest Doodle, Icons or Comic instead.`),
+Discontinued: Caution and Bold Bolder. Don't offer or quote them. If someone asks for one, say it has been discontinued and suggest Doodle, Icons or Comic instead.`, 'https://tapedup.co.uk/collections/climbing-tape'),
   a('k-prices', 'Pricing', 'Trade prices', `Trade price per 7.5m roll (shelf price in brackets):
 
 Plain (Black, White): 1.25cm £1.02 (£2.45) · 2.5cm £1.44 (£3.45) · 5cm £2.27 (£5.45)
@@ -34,7 +34,7 @@ Complex colours (Comic): 1.25cm £1.35 (£3.25) · 2.5cm £2.60 (£6.25) · 5cm 
 PRO Rayon: 2 x 0.5cm £1.85 (£4.45) · 3.8cm £3.10 (£7.45)
 
 Trade prices give dealers a 50% margin on the shelf price (worked out on the price before VAT).
-There is no minimum order.`),
+There is no minimum order.`, 'https://tapedup.co.uk/collections/climbing-tape'),
   a('k-starter', 'Pricing', 'Starter offer and free display stand', `New trade accounts can have our starter offer: 85 rolls across the range for £100, delivered free.
 That's over £125 of stock at trade price, and it sells for over £300 at shelf prices.
 It comes with a free counter display stand (worth £25) for the reception desk or shop counter.
@@ -50,7 +50,7 @@ It's one sample pack per business and per address.
 Once it has arrived we check in to see how it went on the wall.`),
   a('k-ordering', 'Ordering', 'Trade accounts and how to order', `Dealers order online at tapedup.co.uk. They sign in with their email address and get a one-time code (no password). Trade prices show once they're signed in.
 Payment is by card at checkout. Payment on terms (paying by invoice later) is only by agreement with Addison, so never offer it.
-There is no minimum order.`),
+There is no minimum order.`, 'https://tapedup.co.uk'),
   a('k-delivery', 'Delivery', 'Delivery', `We ship UK-wide.
 Delivery is free on orders over £100. Orders under £100 pay £6.49 delivery.
 Don't promise delivery dates: say we'll confirm once the order is in.`),
@@ -74,7 +74,7 @@ export async function loadKnowledge() {
 }
 
 export async function saveKnowledge(articles) {
-  const clean = articles.map(({ id, category, title, body, active, updatedAt }) => ({ id, category, title, body, active: active !== false, updatedAt: updatedAt || new Date().toISOString() }));
+  const clean = articles.map(({ id, category, title, body, link, active, updatedAt }) => ({ id, category, title, body, link: String(link || '').trim(), active: active !== false, updatedAt: updatedAt || new Date().toISOString() }));
   assertOk(await gql('mutation SaveKnowledge($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }', {
     m: [{ ownerId: state.appInstallationId, namespace: NS, key: KEY, type: 'json', value: JSON.stringify({ version: 1, articles: clean }) }],
   }));
