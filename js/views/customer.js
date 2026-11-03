@@ -8,6 +8,7 @@ import {
 import { html, raw, icon, money, money0, ago, fmtDate, dueLabel, trendBadge, statusChip, toast, openDrawer, busy, armed, columnChart, barList, adminUrl } from '../ui.js';
 import { emailCardShell, mountEmailCard } from './email-card.js';
 import { samplesCardShell, mountSamplesCard } from './samples-card.js';
+import { emailsCardShell, mountEmailsCard } from './emails-card.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
@@ -131,6 +132,8 @@ export function render(el, numericId) {
             </div>
           </section>
 
+          ${emailsCardShell()}
+
           ${samplesCardShell()}
 
           ${emailCardShell()}
@@ -148,6 +151,7 @@ export function render(el, numericId) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
   mountSamplesCard(el.querySelector('[data-samples-card]'), c);
+  mountEmailsCard(el.querySelector('[data-emails-card]'), c);
   mountEmailCard(el.querySelector('[data-email-card]'), c);
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
   el.querySelector('[data-edit-details]').addEventListener('click', () => openDetailsDrawer(c));

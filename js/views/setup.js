@@ -119,6 +119,7 @@ const SCOPES = [
   ['write_orders', 'Create orders', 'Bringing order history over from Notion'],
   ['write_draft_orders', 'Draft orders', 'Free sample orders'],
   ['write_discounts', 'Discounts', 'Starter offers and discounts'],
+  ['write_customer_merge', 'Merge customers', 'Merging duplicate trade accounts and their order history'],
 ];
 
 export function render(el) {
