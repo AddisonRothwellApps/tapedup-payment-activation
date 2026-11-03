@@ -21,16 +21,16 @@ Every roll is 7.5m long. Zinc oxide tape comes in three widths: 1.25cm, 2.5cm an
 PRO Rayon tape comes in 2 x 0.5cm (two thin rolls) and 3.8cm.`),
   a('k-range', 'Products', 'Current range and discontinued designs', `Current designs:
 - Plain: Black, White
-- Colours: Doodle, Caution
-- Complex colours: Icons (more than five colours in one design)
+- Colours: Doodle, Icons
+- Complex colours: Comic
 - PRO Rayon
 
-Discontinued: Comic and Bold Bolder. Don't offer or quote them. If someone asks for one, say it has been discontinued and suggest Icons or Doodle instead.`),
+Discontinued: Caution and Bold Bolder. Don't offer or quote them. If someone asks for one, say it has been discontinued and suggest Doodle, Icons or Comic instead.`),
   a('k-prices', 'Pricing', 'Trade prices', `Trade price per 7.5m roll (shelf price in brackets):
 
 Plain (Black, White): 1.25cm £1.02 (£2.45) · 2.5cm £1.44 (£3.45) · 5cm £2.27 (£5.45)
-Colours (Doodle, Caution): 1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
-Complex colours (Icons): 1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
+Colours (Doodle, Icons): 1.25cm £1.23 (£2.95) · 2.5cm £1.65 (£3.95) · 5cm £2.48 (£5.95)
+Complex colours (Comic): 1.25cm £1.35 (£3.25) · 2.5cm £2.60 (£6.25) · 5cm £3.44 (£8.25)
 PRO Rayon: 2 x 0.5cm £1.85 (£4.45) · 3.8cm £3.10 (£7.45)
 
 Trade prices give dealers a 50% margin on the shelf price (worked out on the price before VAT).
