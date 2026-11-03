@@ -15,7 +15,7 @@ const a = (id, category, title, body, link = '') => ({ id, category, title, body
 // Starter articles, from what TapedUp has told dealers by email and the
 // current Shopify prices. Edit them on the Knowledge base screen.
 export const DEFAULT_ARTICLES = [
-  a('k-tape', 'Products', 'Our tape', `TapedUp makes customised zinc oxide climbing tape with printed designs, instead of the plain white roll everyone else sells.
+  a('k-tape', 'Products', 'Our tape', `TapedUp makes zinc oxide climbing tape printed with our own designs, instead of the plain white roll everyone else sells.
 It is medical grade, 100% cotton, latex free and hypoallergenic.
 Every roll is 7.5m long. Zinc oxide tape comes in three widths: 1.25cm, 2.5cm and 5cm.
 PRO Rayon tape comes in 2 x 0.5cm (two thin rolls) and 3.8cm.`),
@@ -54,7 +54,7 @@ There is no minimum order.`, 'https://tapedup.co.uk'),
   a('k-delivery', 'Delivery', 'Delivery', `We ship UK-wide.
 Delivery is free on orders over £100. Orders under £100 pay £6.49 delivery.
 Don't promise delivery dates: say we'll confirm once the order is in.`),
-  a('k-company', 'Company', 'About TapedUp', `TapedUp is a UK company and the UK's first personalised climbing tape brand, started by Addison and Freya.
+  a('k-company', 'Company', 'About TapedUp', `TapedUp is a UK climbing tape brand with its own printed designs, started by Addison and Freya.
 Our tape is stocked by climbing centres and outdoor shops across the UK.
 Website: tapedup.co.uk`),
   a('k-check', 'How to reply', 'Always check with Addison', `Flag these for Addison instead of answering: bespoke or custom designs for a gym, payment terms or credit accounts, discounts beyond the starter offer, delivery dates, stock levels, complaints, and anything not covered in these articles.`),
