@@ -109,7 +109,7 @@ function openEdit(el, item) {
     body: html`<div class="form">
       <label class="field"><span>Subject</span><input class="input" data-subject value="${item.subject}"></label>
       <label class="field"><span>Email</span><textarea class="textarea" data-body rows="14" style="line-height:1.55">${item.body_text}</textarea></label>
-      <p class="muted small" style="margin:0">Fields in {curly brackets} are filled in again when you save. The signature and unsubscribe line are added for you. Saving puts it back in the queue for approval.</p></div>`,
+      <p class="muted small" style="margin:0">Fields in {curly brackets} are filled in again when you save. The signature and "reply STOP" line are added for you. Saving puts it back in the queue for approval.</p></div>`,
     foot: html`<button class="btn" data-save>${icon('check', 'i--sm')}Save changes</button>`,
     onMount: (d) => d.$('[data-save]').addEventListener('click', (e) => busy(e.currentTarget, () => serverApi(`/api/outbox/${item.id}`, { method: 'PATCH', body: { subject: d.$('[data-subject]').value, bodyText: d.$('[data-body]').value } }))
       .then(() => { toast('Saved'); d.close(); ui.tab = 'pending_approval'; ui.items = null; render(el); }).catch(() => {})),

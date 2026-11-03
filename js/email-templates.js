@@ -4,7 +4,7 @@
 //
 // Bodies are plain text: a blank line starts a new paragraph, and {fields}
 // are filled in per dealer. The server adds the signature and, on emails to
-// prospects, the TapedUp Limited line with an unsubscribe link.
+// prospects, the TapedUp Limited line with "reply STOP to opt out".
 import { gql, assertOk } from './api.js';
 import { state } from './store.js';
 
@@ -35,7 +35,8 @@ export const DEFAULT_SET = {
   templates: [
     {
       key: 'intro', name: 'Intro and free samples', stage: 'Prospect', firstTouch: true, optOut: true, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
-      subject: 'Free climbing tape for {gym_name}?',
+      subject: 'Climbing tape for {gym_name}',
+      preview: 'Fancy a free sample pack for {gym_name}? No catch, no invoice.',
       body: `Hi {first_name|there},
 
 {sender_name} here from TapedUp. We make printed zinc oxide climbing tape: the same medical-grade, 100% cotton, latex-free tape your climbers already use, just with proper designs on it instead of plain white.
@@ -48,7 +49,8 @@ Cheers,`,
     },
     {
       key: 'reintro', name: 'Re-introduction (spoke before)', stage: 'Not now', firstTouch: true, optOut: true, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
-      subject: 'TapedUp again, with free samples for {gym_name}',
+      subject: 'New designs from TapedUp for {gym_name}',
+      preview: 'Fancy a free sample pack? Just reply with your address.',
       body: `Hi {first_name|there},
 
 {sender_name} from TapedUp again. We chatted a while back about our climbing tape for {gym_name}. Since then we've added new designs and proper trade accounts, so it felt worth another shout.
@@ -59,7 +61,7 @@ Cheers,`,
     },
     {
       key: 'followup-1', name: 'Follow-up 1', stage: 'Contacted', firstTouch: false, optOut: true, delayDays: 4, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
-      subject: 'Re: Free climbing tape for {gym_name}?',
+      subject: 'Re: Climbing tape for {gym_name}',
       body: `Hi {first_name|there},
 
 Just bumping this back up your inbox in case it got buried under the setting rota. The free sample pack for {gym_name} is still yours: reply with your address and I'll send it over.
@@ -68,7 +70,7 @@ Cheers,`,
     },
     {
       key: 'followup-2', name: 'Follow-up 2 (last one)', stage: 'Contacted', firstTouch: false, optOut: true, delayDays: 9, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
-      subject: 'Re: Free climbing tape for {gym_name}?',
+      subject: 'Re: Climbing tape for {gym_name}',
       body: `Hi {first_name|there},
 
 Last one from me, promise. If tape's not on the list for {gym_name} right now, no worries at all and I'll stop chasing.
