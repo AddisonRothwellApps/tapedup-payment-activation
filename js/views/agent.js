@@ -3,7 +3,7 @@
 // server, so only at trade.tapedup.co.uk.
 import { html, raw, icon, ago, toast, busy, loadingBlock } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
-import { emailState, loadEmailTemplates, saveEmailTemplates, TONES } from '../email-templates.js';
+import { emailState, loadEmailTemplates, saveEmailTemplates } from '../email-templates.js';
 import { TRADE_SERVER } from '../env.js';
 
 const ui = { days: 90, status: null, results: null, error: null, loading: null };
@@ -49,7 +49,7 @@ export function render(el) {
     <div class="page">
       <div class="page-head">
         <div><p class="eyebrow">Sales</p><h1 class="h1">Agent</h1>
-          <p class="muted" style="margin:4px 0 0">Reads replies, drafts answers and chases anyone who hasn't answered. Nothing goes out without you unless you allow it.</p></div>
+          <p class="muted" style="margin:4px 0 0">Reads replies, drafts answers in TapedUp's informal voice and chases anyone who hasn't answered. It only talks about TapedUp. Nothing goes out without you unless you allow it.</p></div>
         <div class="page-head__actions"><button class="btn btn--outline" data-run>${icon('refresh-cw')}Run follow-ups now</button></div>
       </div>
 
@@ -80,7 +80,6 @@ export function render(el) {
           <div class="notice notice--info">${icon('book-open')}<div>${s.knowledgeArticles ? html`The agent answers from <strong>${s.knowledgeArticles} knowledge base article${s.knowledgeArticles === 1 ? '' : 's'}</strong>: products, prices, the starter offer, delivery and more.` : html`The agent can answer customers from <strong>knowledge base articles</strong> (prices, products, delivery…). Check the starter articles and save them to switch it on.`}
             <div style="margin-top:8px"><a class="btn btn--sm btn--outline" href="#/knowledge">${icon('pencil', 'i--sm')}Edit the knowledge base</a></div></div></div>
           <div class="form-row">
-            <label class="field"><span>Reply tone</span><select class="select" data-tone>${TONES.map(([k, l]) => html`<option value="${k}" ${(a.tone || 'brand') === k ? raw('selected') : ''}>${l}</option>`)}</select></label>
             <label class="field"><span>Agent replies</span><select class="select" data-reply>
               <option value="always" ${a.replyApproval !== 'auto' ? raw('selected') : ''}>Always ask me first</option>
               <option value="auto" ${a.replyApproval === 'auto' ? raw('selected') : ''}>May send simple ones (sample requests, "not now")</option></select></label>
@@ -108,7 +107,7 @@ export function render(el) {
     .catch(() => {}));
   const save = el.querySelector('[data-save]');
   save.addEventListener('click', () => {
-    const next = { ...(emailState.set.agent || {}), tone: el.querySelector('[data-tone]').value, replyApproval: el.querySelector('[data-reply]').value };
+    const next = { ...(emailState.set.agent || {}), replyApproval: el.querySelector('[data-reply]').value };
     busy(save, () => saveEmailTemplates({ ...emailState.set, agent: next })).then(() => { toast('Agent settings saved'); ui.status = null; render(el); }).catch(() => {});
   });
 }

@@ -18,7 +18,7 @@ export const FIELDS = [
   ['contact_name', 'Contact name'],
   ['last_order_date', 'Last order date'],
   ['usual_tapes', 'Usual tapes'],
-  ['sender_name', 'Your name'],
+  ['sender_name', 'Your first name'],
 ];
 
 export const TONES = [
@@ -38,38 +38,42 @@ export const DEFAULT_SET = {
       subject: 'Free climbing tape for {gym_name}?',
       body: `Hi {first_name|there},
 
-I'm {sender_name} from TapedUp. We make the world's first customised zinc oxide climbing tape: medical grade, 100% cotton, latex free, and printed with proper designs instead of the plain white roll everyone else ships.
+{sender_name} here from TapedUp. We make printed zinc oxide climbing tape: the same medical-grade, 100% cotton, latex-free tape your climbers already use, just with proper designs on it instead of plain white.
 
-I'd love to send {gym_name} a free sample pack so your team can try it on the wall. No catch, no invoice. Just reply with the best delivery address and I'll get it out this week.
+Fancy a free sample pack for {gym_name}? No catch, no invoice. Just reply with your address and I'll get it in the post this week.
 
-If your climbers like it, we do trade pricing for gyms and shops. It tends to sell itself off the counter, mostly because everyone asks where you got it.`,
+If your climbers get on with it, we do trade prices for gyms and shops. It tends to sell itself off the counter, mostly because everyone asks where you got it.
+
+Cheers,`,
     },
     {
       key: 'reintro', name: 'Re-introduction (spoke before)', stage: 'Not now', firstTouch: true, optOut: true, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
       subject: 'TapedUp again, with free samples for {gym_name}',
       body: `Hi {first_name|there},
 
-We spoke a while back about TapedUp climbing tape for {gym_name}. Since then we've added new designs and set up proper trade accounts for gyms and shops.
+{sender_name} from TapedUp again. We chatted a while back about our climbing tape for {gym_name}. Since then we've added new designs and proper trade accounts, so it felt worth another shout.
 
-If it's worth another look, I'll happily send a free sample pack. Just reply with an address and it's on its way.`,
+Fancy a free sample pack? Just reply with your address and it's on its way.
+
+Cheers,`,
     },
     {
       key: 'followup-1', name: 'Follow-up 1', stage: 'Contacted', firstTouch: false, optOut: true, delayDays: 4, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
       subject: 'Re: Free climbing tape for {gym_name}?',
       body: `Hi {first_name|there},
 
-Just bumping this back up your inbox in case it got buried under the setting rota. The free sample pack for {gym_name} is still yours: reply with an address and I'll send it over.
+Just bumping this back up your inbox in case it got buried under the setting rota. The free sample pack for {gym_name} is still yours: reply with your address and I'll send it over.
 
-Thanks,`,
+Cheers,`,
     },
     {
       key: 'followup-2', name: 'Follow-up 2 (last one)', stage: 'Contacted', firstTouch: false, optOut: true, delayDays: 9, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
       subject: 'Re: Free climbing tape for {gym_name}?',
       body: `Hi {first_name|there},
 
-Last one from me, promise. If tape isn't something {gym_name} needs right now, no problem at all, and I won't keep chasing.
+Last one from me, promise. If tape's not on the list for {gym_name} right now, no worries at all and I'll stop chasing.
 
-If it is, the samples are ready to go whenever you are. Just reply with where to send them.
+If it is, the samples are ready whenever you are. Just reply with where to send them.
 
 Happy climbing,`,
     },
@@ -100,7 +104,9 @@ That's a 50% margin on every roll. We're not VAT registered yet, so there's no V
 
 The easiest way in is our starter offer: 85 rolls across plain, colours, Icons and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
 
-Want the starter offer? Just reply "starter" and I'll open your trade account with it ready at checkout. Or try the samples first and I'll check in once they've had a few sessions.`,
+Want the starter offer? Just reply "starter" and I'll open your trade account with it ready at checkout. Or try the samples first and I'll check in once they've had a few sessions.
+
+Cheers,`,
     },
     {
       key: 'pricing', name: 'Prices and starter offer', stage: 'Replied', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
@@ -127,49 +133,59 @@ That's a 50% margin on every roll. We're not VAT registered yet, so there's no V
 
 The easiest way in is our starter offer: 85 rolls across plain, colours, Icons and PRO Rayon for £100, delivered free. That's over £125 of stock at trade price, and it sells for over £300 on your shelf. It also comes with a free counter display stand (worth £25) for your reception desk or shop, which is where most of the sales happen.
 
-Want it? Just reply "starter" and I'll open your trade account with the offer ready at checkout. Any questions, reply here.`,
+Want it? Just reply "starter" and I'll open your trade account with the offer ready at checkout. Any questions, reply here.
+
+Cheers,`,
     },
     {
       key: 'sample-checkin', name: 'Sample check-in', stage: 'Sample sent', firstTouch: false, optOut: false, delayDays: 5, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
       subject: 'How did the TapedUp samples hold up?',
       body: `Hi {first_name|there},
 
-Your samples should have landed by now. How did they hold up?
+Your samples should have landed by now. How did they hold up on the wall?
 
-If {gym_name} would like to stock them, I can set up a trade account today: trade pricing on every design and a starter order to get your counter going. Just say the word.`,
+If you fancy stocking them at {gym_name}, I can set up a trade account today. Our starter offer gets you 85 rolls for £100 with a free counter display stand, which is the easiest way to get going. Just say the word.
+
+Cheers,`,
     },
     {
       key: 'account-walkthrough', name: 'Trade account walkthrough', stage: 'Account opened', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'friendly', offerTemplateId: '', active: true,
       subject: 'Your TapedUp trade account is ready',
       body: `Hi {first_name|there},
 
-Your TapedUp trade account is set up. Ordering takes about two minutes:
+You're all set: {gym_name}'s TapedUp trade account is live. Ordering takes about two minutes:
 
-1. Go to tapedup.co.uk and sign in with this email address. You'll get a one-time code by email, so there's no password to remember.
-2. Once you're signed in, trade prices show on every design.
-3. Check out by card, or on account if we've agreed terms.
+1. Head to tapedup.co.uk and sign in with this email address. We'll email you a one-time code, so there's no password to remember.
+2. Once you're in, trade prices show on every design.
+3. Pay by card at checkout (or on account, if we've agreed that with you).
 
-If we've set you up with a starter offer, it comes off automatically at checkout.
+If you've got the starter offer, it comes off automatically at checkout.
 
-Anything unclear, reply here and I'll sort it.`,
+Any questions, just reply here.
+
+Cheers,`,
     },
     {
       key: 'reorder', name: 'Reorder reminder', stage: 'Active dealer', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'friendly', offerTemplateId: '', active: true,
       subject: 'Running low on {usual_tapes}?',
       body: `Hi {first_name|there},
 
-It's been a little while since {gym_name}'s last order on {last_order_date}, so I thought I'd check whether you're running low on {usual_tapes}.
+It's been a little while since {gym_name}'s last order on {last_order_date}, so I thought I'd check in. Running low on {usual_tapes}?
 
-If you'd like the same again, reply and I'll set it up, or order any time at tapedup.co.uk.`,
+If you want the same again, just reply and I'll sort it, or order any time at tapedup.co.uk.
+
+Cheers,`,
     },
     {
       key: 'winback', name: 'Win-back', stage: 'Lapsed', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
       subject: 'New designs since your last TapedUp order',
       body: `Hi {first_name|there},
 
-We've not seen an order from {gym_name} for a while, and we've added new designs since. If you'd like to restock, I can put a reorder offer on your account. Just reply and I'll set it up.
+We've not seen an order from {gym_name} in a while, and we've added some new designs since. If you fancy a restock, just reply and I'll set it up for you.
 
-And if something put you off, I'd genuinely like to know.`,
+And if something put you off, I'd genuinely like to know. No hard feelings either way.
+
+Cheers,`,
     },
   ],
 };
