@@ -32,37 +32,59 @@ export async function mountEmailsCard(card, c) {
     return;
   }
   if (!card.isConnected) return;
-  const rows = data.others.map((x) => ({ ...x }));
+  const roleName = (r) => (ROLES.find(([k]) => k === r) || [, 'Secondary'])[1];
+  // Addresses noted in the old details fields (e.g. from Notion) that aren't on the account yet.
+  const p = c.crm.profile || {};
+  const known = new Set([data.primary, ...data.others.map((x) => x.email)]);
+  const legacy = [...(p.otherEmails || []).map((e) => ({ email: String(e).toLowerCase(), role: 'secondary' })), ...(p.financeEmail ? [{ email: String(p.financeEmail).toLowerCase(), role: 'finance' }] : [])]
+    .filter((x) => x.email.includes('@') && !known.has(x.email));
 
-  const paint = () => {
-    body.innerHTML = String(html`<div class="form">
-      <label class="field"><span>Main email <span class="muted small">(sign-in, and where our emails go)</span></span><input class="input" type="email" data-main value="${data.primary || ''}"></label>
-      ${rows.map((r, i) => html`<div class="row" style="gap:6px;align-items:flex-end">
-        <label class="field" style="flex:1;min-width:0"><span>${i === 0 ? 'Other emails' : html`<span class="visually-hidden">Email</span>`}</span><input class="input" type="email" data-oe="${i}" value="${r.email}" placeholder="name@gym.co.uk"></label>
-        <select class="select" data-or="${i}" style="width:auto" aria-label="Type">${ROLES.map(([k, l]) => html`<option value="${k}" ${r.role === k ? raw('selected') : ''}>${l}</option>`)}</select>
-        <button type="button" class="btn btn--ghost btn--icon" data-rm="${i}" aria-label="Remove ${r.email}">${icon('x', 'i--sm')}</button></div>`)}
-      <div class="row row--wrap" style="gap:6px">
-        <button type="button" class="btn btn--outline btn--sm" data-add>${icon('plus', 'i--sm')}Add an email</button>
-        <button type="button" class="btn btn--sm" data-save>${icon('check', 'i--sm')}Save emails</button>
-      </div>
-      <p class="muted small" style="margin:0">Replies from any of these land on this account. Finance is who invoices go to.</p>
-      <hr style="border:0;border-top:1px solid var(--border-subtle);margin:4px 0">
-      <button type="button" class="btn btn--ghost btn--sm" data-merge style="justify-self:start">${icon('merge', 'i--sm')}Merge with another account or prospect</button>
+  body.innerHTML = String(html`<div class="list">
+      <div class="list__item"><span class="list__main"><span class="strong clip">${data.primary || 'No main email'}</span><span class="small muted">Main: sign-in and our emails</span></span></div>
+      ${data.others.map((x) => html`<div class="list__item"><span class="list__main"><span class="strong clip">${x.email}</span><span class="small muted">${roleName(x.role)}</span></span></div>`)}
+    </div>
+    ${legacy.length ? html`<p class="muted small" style="margin:10px 0 0">Also noted on this account: ${legacy.map((x) => x.email).join(', ')}. Add them with Edit.</p>` : ''}
+    <div class="row row--wrap" style="gap:6px;margin-top:12px">
+      <button type="button" class="btn btn--outline btn--sm" data-edit>${icon('pencil', 'i--sm')}Edit</button>
+      <button type="button" class="btn btn--ghost btn--sm" data-merge>${icon('merge', 'i--sm')}Merge…</button>
     </div>`);
-    const sync = () => body.querySelectorAll('[data-oe]').forEach((inp) => { rows[Number(inp.dataset.oe)].email = inp.value; });
-    body.querySelectorAll('[data-or]').forEach((s) => s.addEventListener('change', () => { rows[Number(s.dataset.or)].role = s.value; }));
-    body.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { sync(); rows.splice(Number(b.dataset.rm), 1); paint(); }));
-    body.querySelector('[data-add]').addEventListener('click', () => { sync(); rows.push({ email: '', role: 'secondary' }); paint(); body.querySelector(`[data-oe="${rows.length - 1}"]`).focus(); });
-    body.querySelector('[data-save]').addEventListener('click', (e) => {
-      sync();
-      const payload = { primary: body.querySelector('[data-main]').value.trim(), others: rows.filter((r) => r.email.trim()) };
-      busy(e.currentTarget, () => serverApi(`/api/accounts/${c.numericId}/emails`, { method: 'POST', body: payload }))
-        .then((r) => { data = r; rows.splice(0, rows.length, ...r.others.map((x) => ({ ...x }))); toast('Emails saved'); paint(); return refreshCustomer(c.id); })
-        .catch(() => {});
-    });
-    body.querySelector('[data-merge]').addEventListener('click', () => openMerge(c, data));
-  };
-  paint();
+  body.querySelector('[data-edit]').addEventListener('click', () => openEditor(c, data, legacy, () => mountEmailsCard(card, c)));
+  body.querySelector('[data-merge]').addEventListener('click', () => openMerge(c, data));
+}
+
+function openEditor(c, data, legacy, done) {
+  const rows = [...data.others.map((x) => ({ ...x })), ...legacy.map((x) => ({ ...x }))];
+  openDrawer({
+    title: 'Email addresses', eyebrow: label(c), wide: true,
+    body: html`<div class="form" data-ed></div>`,
+    foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save emails</button>`,
+    onMount: (d) => {
+      const box = d.$('[data-ed]');
+      let main = data.primary || '';
+      const sync = () => { main = box.querySelector('[data-main]').value; box.querySelectorAll('[data-oe]').forEach((inp) => { rows[Number(inp.dataset.oe)].email = inp.value; }); };
+      const paint = () => {
+        box.innerHTML = String(html`
+          <label class="field"><span>Main email <span class="muted small">(sign-in, and where our emails go)</span></span><input class="input" type="email" data-main value="${main}"></label>
+          ${rows.map((r, i) => html`<div class="row" style="gap:6px;align-items:flex-end">
+            <label class="field" style="flex:1;min-width:0"><span>${i === 0 ? 'Other emails' : html`<span class="visually-hidden">Email</span>`}</span><input class="input" type="email" data-oe="${i}" value="${r.email}" placeholder="name@gym.co.uk"></label>
+            <select class="select" data-or="${i}" style="width:auto" aria-label="Type">${ROLES.map(([k, l]) => html`<option value="${k}" ${r.role === k ? raw('selected') : ''}>${l}</option>`)}</select>
+            <button type="button" class="btn btn--ghost btn--icon" data-rm="${i}" aria-label="Remove ${r.email}">${icon('x', 'i--sm')}</button></div>`)}
+          <button type="button" class="btn btn--outline btn--sm" data-add style="justify-self:start">${icon('plus', 'i--sm')}Add an email</button>
+          <p class="muted small" style="margin:0">Replies from any of these land on this account. Finance is who invoices go to. Changing the main email changes it in Shopify too.</p>`);
+        box.querySelectorAll('[data-or]').forEach((s) => s.addEventListener('change', () => { rows[Number(s.dataset.or)].role = s.value; }));
+        box.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { sync(); rows.splice(Number(b.dataset.rm), 1); paint(); }));
+        box.querySelector('[data-add]').addEventListener('click', () => { sync(); rows.push({ email: '', role: 'secondary' }); paint(); box.querySelector(`[data-oe="${rows.length - 1}"]`).focus(); });
+      };
+      paint();
+      d.$('[data-save]').addEventListener('click', (e) => {
+        sync();
+        const payload = { primary: main.trim(), others: rows.filter((r) => r.email.trim()) };
+        busy(e.currentTarget, () => serverApi(`/api/accounts/${c.numericId}/emails`, { method: 'POST', body: payload }))
+          .then(() => { toast('Emails saved'); d.close(); done(); return refreshCustomer(c.id); })
+          .catch(() => {});
+      });
+    },
+  });
 }
 
 function openMerge(c, data) {

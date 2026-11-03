@@ -6,13 +6,18 @@ import {
   setTag, setStage, saveNote, saveProfile, lastContact, orderSummary, addLog, updateLog, deleteLog, removeOffer, revenueSeries, todayISO, addDaysISO,
 } from '../store.js';
 import { html, raw, icon, money, money0, ago, fmtDate, dueLabel, trendBadge, statusChip, toast, openDrawer, busy, armed, columnChart, barList, adminUrl } from '../ui.js';
-import { emailCardShell, mountEmailCard } from './email-card.js';
+import { emailCardShell, mountEmailCard, draftPickerShell, mountDraftPicker } from './email-card.js';
+import { serverApi, SERVER_FEATURES } from '../server.js';
+import { TRADE_SERVER } from '../env.js';
 import { samplesCardShell, mountSamplesCard } from './samples-card.js';
 import { emailsCardShell, mountEmailsCard } from './emails-card.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
 const expanded = new Set();
+// "View more" on orders and activity, remembered while you stay on one customer.
+const more = { id: null, orders: false, log: false };
+const FIRST = 5;
 
 /** The saved address as one line: typed text, or the parts the agent saved from an email. */
 const addressText = (a) => (a && typeof a === 'object'
@@ -26,6 +31,7 @@ export function render(el, numericId) {
       <div class="card empty">${icon('users')}<span>That customer isn't in the list. They may have been deleted in Shopify.</span></div></div>`);
     return;
   }
+  if (more.id !== c.id) Object.assign(more, { id: c.id, orders: false, log: false });
   const s = insights(c);
   const allOrders = state.ordersByCustomer.get(c.numericId) || [];
   const offerState = offerStatus(c);
@@ -55,9 +61,6 @@ export function render(el, numericId) {
           </div>
         </div>
         <div class="page-head__actions">
-          ${c.email ? html`<a class="btn btn--outline btn--sm" href="mailto:${c.email}" target="_blank" rel="noopener" data-email>${icon('mail', 'i--sm')}Email</a>` : ''}
-          ${c.phone ? html`<a class="btn btn--outline btn--sm" href="tel:${c.phone.replace(/\s/g, '')}" data-call>${icon('phone', 'i--sm')}Call</a>` : ''}
-          <button class="btn btn--sm" data-log>${icon('notebook-pen', 'i--sm')}Log activity</button>
           <a class="btn btn--ghost btn--sm" href="${adminUrl(`customers/${c.numericId}`)}" target="_top">${icon('external-link', 'i--sm')}Shopify</a>
         </div>
       </div>
@@ -85,10 +88,10 @@ export function render(el, numericId) {
           </section>
 
           <section class="card card--flush">
-            <div class="card__head"><h2 class="h2">Orders</h2><span class="muted small">${allOrders.length} shown</span></div>
+            <div class="card__head"><h2 class="h2">Orders</h2><span class="muted small">${allOrders.length > FIRST && !more.orders ? `Latest ${FIRST} of ${allOrders.length}` : `${allOrders.length} order${allOrders.length === 1 ? '' : 's'}`}</span></div>
             ${allOrders.length ? html`<div class="table-wrap" style="margin-top:6px"><table class="table">
               <thead><tr><th>Order</th><th>Date</th><th class="hide-sm">Items</th><th class="r">Total</th><th>Payment</th><th class="hide-sm">Fulfilment</th></tr></thead>
-              <tbody>${allOrders.map((o) => html`
+              <tbody>${(more.orders ? allOrders : allOrders.slice(0, FIRST)).map((o) => html`
                 <tr data-href="${o.id}" data-order="${o.id}">
                   <td class="nowrap"><span class="strong">${o.name}</span> ${o.x ? html`<span class="badge">Cancelled</span>` : ''}</td>
                   <td class="nowrap">${fmtDate(o.at)}</td>
@@ -100,12 +103,24 @@ export function render(el, numericId) {
                 ${expanded.has(o.id) ? html`<tr><td colspan="6" style="background:var(--surface-subtle)">
                   <div class="list">${o.lines.map(([title, variant, qty, amount]) => html`<div class="list__item"><span class="list__main">${title}${variant ? html` <span class="muted">· ${variant}</span>` : ''}</span><span class="num">${qty} ×</span><span class="num" style="width:90px;text-align:right">${money(amount)}</span></div>`)}</div>
                   <a class="btn btn--ghost btn--sm" style="margin-top:8px" href="${adminUrl(`orders/${o.id}`)}" target="_top">${icon('external-link', 'i--sm')}Open in Shopify</a>
-                </td></tr>` : ''}`)}</tbody></table></div>`
+                </td></tr>` : ''}`)}</tbody></table></div>
+              ${allOrders.length > FIRST ? html`<div style="padding:10px 16px 14px"><button class="btn btn--ghost btn--sm" data-more="orders">${more.orders ? 'Show the latest 5' : `View all ${allOrders.length} orders`}</button></div>` : ''}`
               : html`<div class="empty">${icon('receipt')}<span>No orders in the synced history.</span></div>`}
           </section>
+
+          <section class="card">
+            <div class="card__head"><h2 class="h2">Activity</h2><button class="btn btn--sm" data-log>${icon('plus', 'i--sm')}Log</button></div>
+            ${log.length ? html`<div class="timeline">${(more.log ? log : log.slice(0, FIRST)).map((e) => timelineItem(e, today))}</div>
+              ${log.length > FIRST ? html`<button class="btn btn--ghost btn--sm" style="margin-top:8px" data-more="log">${more.log ? 'Show the latest 5' : `View all ${log.length} entries`}</button>` : ''}`
+              : html`<p class="muted small" style="margin:0">No calls, emails or notes yet. Log one to start the history.</p>`}
+          </section>
+
+          ${emailCardShell()}
         </div>
 
         <div class="stack">
+          ${quickActions(c)}
+
           ${detailsCard(c, contacted)}
 
           <section class="card">
@@ -137,16 +152,15 @@ export function render(el, numericId) {
             </div>
           </section>
 
-          ${emailsCardShell()}
-
           ${samplesCardShell()}
 
-          ${emailCardShell()}
+          ${emailsCardShell()}
 
           <section class="card">
-            <div class="card__head"><h2 class="h2">Activity</h2><button class="btn btn--sm" data-log>${icon('plus', 'i--sm')}Log</button></div>
-            ${log.length ? html`<div class="timeline">${log.map((e) => timelineItem(e, today))}</div>`
-              : html`<p class="muted small" style="margin:0">No calls, emails or notes yet. Log one to start the history.</p>`}
+            <div class="card__head"><h2 class="h2">Remove or delete</h2></div>
+            ${SERVER_FEATURES ? html`<p class="muted small" style="margin:0 0 10px">Take ${label(c)} out of Trade Hub, or delete them from Shopify if they've never ordered.</p>
+              <button class="btn btn--danger btn--ghost btn--sm" data-remove>${icon('trash-2', 'i--sm')}Remove or delete…</button>`
+              : html`<p class="muted small" style="margin:0">Remove or delete accounts at <a href="${TRADE_SERVER}/#/customers/${c.numericId}" target="_blank" rel="noopener">trade.tapedup.co.uk</a>.</p>`}
           </section>
         </div>
       </div>
@@ -158,12 +172,13 @@ export function render(el, numericId) {
   mountSamplesCard(el.querySelector('[data-samples-card]'), c);
   mountEmailsCard(el.querySelector('[data-emails-card]'), c);
   mountEmailCard(el.querySelector('[data-email-card]'), c);
+  mountDraftPicker(el.querySelector('[data-draft-picker]'), c);
+  el.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', () => { more[b.dataset.more] = !more[b.dataset.more]; render(el, numericId); }));
+  el.querySelectorAll('[data-qa]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c, b.dataset.qa)));
+  const rm = el.querySelector('[data-remove]');
+  if (rm) rm.addEventListener('click', () => openRemove(c));
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
   el.querySelector('[data-edit-details]').addEventListener('click', () => openDetailsDrawer(c));
-  const email = el.querySelector('[data-email]');
-  if (email) email.addEventListener('click', () => setTimeout(() => openLogDrawer(c, 'email'), 300));
-  const call = el.querySelector('[data-call]');
-  if (call) call.addEventListener('click', () => setTimeout(() => openLogDrawer(c, 'call'), 300));
 
   el.querySelectorAll('[data-order]').forEach((tr) => tr.addEventListener('click', () => {
     if (expanded.has(tr.dataset.order)) expanded.delete(tr.dataset.order); else expanded.add(tr.dataset.order);
@@ -196,14 +211,56 @@ export function render(el, numericId) {
   el.querySelectorAll('[data-del]').forEach((b) => armed(b, () => busy(b, () => deleteLog(c, b.dataset.del)).then(() => toast('Deleted')).catch(() => {}), 'Delete?'));
 }
 
+/** The things you do most, in one place at the top of the side column. */
+function quickActions(c) {
+  return html`<section class="card">
+    <div class="card__head"><h2 class="h2">Quick actions</h2></div>
+    <div class="qa">
+      <button class="btn btn--outline btn--sm" data-qa="call">${icon('phone', 'i--sm')}Log a call</button>
+      <button class="btn btn--outline btn--sm" data-qa="meeting">${icon('handshake', 'i--sm')}Log a visit</button>
+      <button class="btn btn--outline btn--sm" data-qa="note">${icon('notebook-pen', 'i--sm')}Add a note</button>
+      ${c.phone ? html`<a class="btn btn--outline btn--sm" href="tel:${c.phone.replace(/\s/g, '')}">${icon('phone-outgoing', 'i--sm')}Call</a>` : ''}
+    </div>
+    ${draftPickerShell()}
+  </section>`;
+}
+
+/** Remove from Trade Hub (trade tags off, stays in Shopify) or delete from Shopify (no orders only). */
+function openRemove(c) {
+  const canDelete = !c.numberOfOrders;
+  openDrawer({
+    eyebrow: label(c), title: 'Remove or delete',
+    body: html`<div class="form">
+      <label class="check"><input type="radio" name="mode" value="remove" checked><span><span class="strong">Remove from Trade Hub</span><br>
+        <span class="muted small">Takes off the trade tags, so they lose trade pricing and leave Trade Hub. They stay in Shopify as a normal customer, with their ${c.numberOfOrders} order${c.numberOfOrders === 1 ? '' : 's'}. Unsent drafts are cancelled.</span></span></label>
+      <label class="check"><input type="radio" name="mode" value="delete" ${canDelete ? '' : raw('disabled')}><span><span class="strong">Delete from Shopify for good</span><br>
+        <span class="muted small">${canDelete ? "Deletes the customer and our email history with them. This can't be undone." : "Not possible: Shopify won't delete a customer who has orders."}</span></span></label>
+    </div>`,
+    foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn btn--danger" data-go>${icon('trash-2', 'i--sm')}Remove</button>`,
+    onMount(api) {
+      const go = api.$('[data-go]');
+      const sync = () => { go.innerHTML = String(html`${icon('trash-2', 'i--sm')}${api.$('input[name="mode"]:checked').value === 'delete' ? 'Delete for good' : 'Remove'}`); };
+      api.$$('input[name="mode"]').forEach((r) => r.addEventListener('change', sync));
+      armed(go, () => {
+        const mode = api.$('input[name="mode"]:checked').value;
+        busy(go, () => serverApi(`/api/accounts/${c.numericId}/remove`, { method: 'POST', body: { mode } }))
+          .then(() => {
+            state.customers.delete(c.id); state.byNumericId.delete(c.numericId);
+            toast(mode === 'delete' ? `${label(c)} deleted` : `${label(c)} removed from Trade Hub`);
+            api.close();
+            location.hash = '#/customers';
+          }).catch(() => {});
+      }, 'Click again to confirm');
+    },
+  });
+}
+
 function detailsCard(c, contacted) {
   const p = c.crm.profile;
   const rows = [
     ['Company', c.company],
     ['Contact', c.contact || (c.name !== c.email && c.name !== c.company ? c.name : '')],
     ['Email', c.email],
-    ['Other emails', (p.otherEmails || []).join(', ')],
-    ['Finance email', p.financeEmail],
     ['Phone', c.phone],
     ['Address', addressText(p.address)],
     ['Last contact', contacted ? `${fmtDate(contacted)} (${ago(contacted)})` : ''],
@@ -226,12 +283,11 @@ function openDetailsDrawer(c) {
     body: html`<form class="form" onsubmit="return false">
       ${field('company', 'Company / gym', c.company)}
       ${field('contact', 'Contact', c.contact, 'placeholder="Who you deal with"')}
-      <div class="form-row">${field('phone', 'Phone', p.phone || c.phone, 'type="tel"')}${field('financeEmail', 'Finance email', p.financeEmail, 'type="email"')}</div>
-      ${field('otherEmails', 'Other emails', (p.otherEmails || []).join(', '), 'placeholder="Separate with commas"')}
+      ${field('phone', 'Phone', p.phone || c.phone, 'type="tel"')}
       <label class="field"><span>Address</span><textarea class="textarea" data-p="address" rows="2">${addressText(p.address)}</textarea></label>
       <label class="field"><span>Last contacted</span><input class="input" type="date" data-p="lastContacted" value="${(p.lastContacted || '').slice(0, 10)}" max="${todayISO()}"></label>
       <label class="check"><input type="checkbox" data-visited ${(p.labels || []).includes('Visited') ? raw('checked') : ''}><span>Visited in person</span></label>
-      <p class="muted small" style="margin:0">Logging a call, email or visit updates "last contact" by itself. The email and phone they sign in with are changed in Shopify (${c.email || 'no email'}).</p>
+      <p class="muted small" style="margin:0">Logging a call, email or visit updates "last contact" by itself. Email addresses (main, secondary and finance) are edited in the Email addresses card.</p>
     </form>`,
     foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-save>${icon('check', 'i--sm')}Save</button>`,
     onMount(api) {
@@ -240,8 +296,7 @@ function openDetailsDrawer(c) {
         const labels = (p.labels || []).filter((l) => l !== 'Visited');
         if (api.$('[data-visited]').checked) labels.push('Visited');
         const patch = {
-          company: v('company'), contact: v('contact'), phone: v('phone'), financeEmail: v('financeEmail'),
-          otherEmails: v('otherEmails').split(/[,;\s]+/).filter((x) => x.includes('@')),
+          company: v('company'), contact: v('contact'), phone: v('phone'),
           address: v('address'), lastContacted: v('lastContacted'), labels,
         };
         if (!patch.company) { toast('Add the company name', 'err'); return; }
