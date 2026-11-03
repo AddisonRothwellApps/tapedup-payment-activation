@@ -399,3 +399,7 @@ button { font: inherit; }
 /* Agent: spend against the monthly budget */
 .meter { height: 6px; border-radius: 999px; background: var(--border-subtle); overflow: hidden; }
 .meter > span { display: block; height: 100%; background: var(--brand-primary); border-radius: inherit; }
+
+/* Customer page: quick actions */
+.qa { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.qa .btn { justify-content: center; }
