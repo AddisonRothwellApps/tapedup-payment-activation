@@ -26,7 +26,7 @@ function fromCustomer(c) {
   const p = c.crm.profile || {};
   const st = stageOf(c);
   return {
-    company: c.company || '', contact: c.contact || '', phone: p.phone || c.phone || '', address: addressText(p.address),
+    company: c.company || '', contact: c.contact || (c.name && c.name !== c.email && c.name !== c.company ? c.name : ''), phone: p.phone || c.phone || '', address: addressText(p.address),
     lastContacted: String(p.lastContacted || '').slice(0, 10), visited: (p.labels || []).includes('Visited'),
     dealer: isDealer(c), terms: isTerms(c), stage: st.guessed ? '' : st.stage, note: c.note || '',
   };
