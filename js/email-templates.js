@@ -168,6 +168,25 @@ Any questions, just reply here.
 Cheers,`,
     },
     {
+      key: 'starter-ready', name: 'Account ready (with starter offer)', stage: 'Account opened', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true,
+      subject: "You're all set: your TapedUp trade account is ready",
+      body: `Hi {first_name|there},
+
+Brilliant, you're all set. {gym_name}'s trade account is live and the starter offer is on it: 85 rolls across the range for £100, with free delivery and a free counter display stand.
+
+Grabbing it takes about two minutes:
+
+1. Head to tapedup.co.uk and sign in with this email address. We'll email you a one-time code, so there's no password to remember.
+2. Your starter order will be waiting in your basket at the £100 price.
+3. Check out by card and we'll get it packed and on its way.
+
+The offer stays on your account for 30 days. Once you're in, trade prices show on every design for any top-ups after that.
+
+Any questions, just reply here.
+
+Cheers,`,
+    },
+    {
       key: 'reorder', name: 'Reorder reminder', stage: 'Active dealer', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'friendly', offerTemplateId: '', active: true,
       subject: 'Running low on {usual_tapes}?',
       body: `Hi {first_name|there},
