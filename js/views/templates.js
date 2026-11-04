@@ -4,6 +4,7 @@
 // dealer and can send a test to you; inside admin it edits only.
 import { state, PIPELINE, label } from '../store.js';
 import { html, raw, icon, toast, openDrawer, busy, loadingBlock, showEmail } from '../ui.js';
+import { richTextShell, mountRichText } from '../rich-text.js';
 import { emailState, loadEmailTemplates, saveEmailTemplates, FIELDS, TONES, DEFAULT_SET, unknownFields } from '../email-templates.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { TRADE_SERVER } from '../env.js';
@@ -98,13 +99,8 @@ function openEditor(el, existing) {
       <label class="field"><span>Subject</span><input class="input" data-f="subject" value="${t.subject}"></label>
       <label class="field"><span>Preview text (optional)</span><input class="input" data-f="preview" value="${t.preview || ''}" placeholder="The grey line inboxes show after the subject"></label>
       <div class="field"><span>Email</span>
-        <div class="row" style="gap:4px" role="toolbar" aria-label="Formatting">
-          <button type="button" class="btn btn--ghost btn--sm" data-mark="**" title="Bold: **text**" aria-label="Bold" style="font-weight:800;text-transform:none;letter-spacing:0">B</button>
-          <button type="button" class="btn btn--ghost btn--sm" data-mark="*" title="Italics: *text*" aria-label="Italics" style="font-style:italic;text-transform:none;letter-spacing:0">I</button>
-          <button type="button" class="btn btn--ghost btn--sm" data-mark="__" title="Underline: __text__" aria-label="Underline" style="text-decoration:underline;text-transform:none;letter-spacing:0">U</button>
-          <span class="small muted">Select text, then press B, I or U. Shows as **bold**, *italics*, __underline__ here; formatted in the email.</span>
-        </div>
-        <textarea class="textarea" data-f="body" rows="12" style="font-family:var(--font-body);line-height:1.55" aria-label="Email">${t.body}</textarea></div>
+        ${richTextShell({ label: 'Email', rows: 12 })}
+        <textarea data-f="body" hidden>${t.body}</textarea></div>
       <div class="row row--wrap" style="gap:6px"><span class="small muted">Insert:</span>${FIELDS.map(([k, name]) => html`<button type="button" class="btn btn--ghost btn--sm" data-insert="${k}" title="${name}" style="text-transform:none;letter-spacing:0">{${k}}</button>`)}</div>
       <p class="small muted" style="margin:0" data-unknown></p>
       <div class="form-row">
@@ -141,25 +137,11 @@ function openEditor(el, existing) {
         unknown.textContent = bad.length ? `Not a field we can fill: ${bad.map((b) => `{${b}}`).join(', ')}. These will be sent as typed.` : '';
       };
       body.addEventListener('input', checkFields); checkFields();
-      // Wrap the selection in a formatting mark (or take it off again if it's already wrapped).
-      d.$$('[data-mark]').forEach((b) => b.addEventListener('click', () => {
-        const m = b.dataset.mark;
-        const { selectionStart: s, selectionEnd: e, value } = body;
-        const sel = value.slice(s, e);
-        if (value.slice(s - m.length, s) === m && value.slice(e, e + m.length) === m) {
-          body.setRangeText(sel, s - m.length, e + m.length, 'select');
-        } else if (sel) {
-          const lead = sel.match(/^\s*/)[0]; const trail = sel.match(/\s*$/)[0];
-          body.setRangeText(`${lead}${m}${sel.trim()}${m}${trail}`, s, e, 'select');
-        } else {
-          body.setRangeText(`${m}${m}`, s, e, 'end'); body.selectionStart = body.selectionEnd = s + m.length;
-        }
-        body.focus();
-      }));
-      d.$$('[data-insert]').forEach((b) => b.addEventListener('click', () => {
-        const ins = `{${b.dataset.insert}}`;
-        const { selectionStart: s, selectionEnd: e } = body;
-        body.setRangeText(ins, s, e, 'end'); body.focus(); checkFields();
+      // The editor keeps the hidden body field up to date, so saving and previews read it as before.
+      const rte = mountRichText(d.$('.rte-wrap'), body.value, { onChange: (text) => { body.value = text; checkFields(); } });
+      d.$$('[data-insert]').forEach((b) => b.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // keep the cursor where it was in the email
+        rte.insert(`{${b.dataset.insert}}`);
       }));
 
       const preview = d.$('[data-preview]');
