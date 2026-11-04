@@ -66,7 +66,9 @@ function suggest(x, tpl, now = Date.now()) {
   };
   // A sister centre already stocks us: lead with that.
   if (since < 30) return ''; // emailed in the last month (from sales@ too): give them a breather
-  const firstTouch = sisterStocking(x) && tpl.has('sister-site') ? 'sister-site' : x.p ? (x.p.template === 'reintro' ? 'reintro' : 'intro') : 'intro';
+  // Never emailed: the intro (or the sister-centre intro). Emailed before, from either mailbox: the re-introduction.
+  const firstTouch = lastOut ? 'reintro'
+    : sisterStocking(x) && tpl.has('sister-site') ? 'sister-site' : x.p ? (x.p.template === 'reintro' ? 'reintro' : 'intro') : 'intro';
   switch (stage) {
     case 'Prospect': { const c = chase(); return c !== null ? c : has(firstTouch); }
     case 'Contacted': { const c = chase(); return c !== null ? c : has(x.p ? firstTouch : 'reintro'); }
