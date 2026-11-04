@@ -5,6 +5,7 @@
 import { state } from '../store.js';
 import { html, icon, ago, toast, openDrawer, busy, loadingBlock, showEmail } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
+import { richTextShell, mountRichText } from '../rich-text.js';
 import { TRADE_SERVER } from '../env.js';
 
 const ui = { tab: 'pending_approval', items: null, status: null, loading: false, error: '' };
@@ -133,11 +134,14 @@ function openEdit(el, item) {
     title: 'Edit email', eyebrow: `To ${item.customer_name || item.to_address}`, wide: true,
     body: html`<div class="form">
       <label class="field"><span>Subject</span><input class="input" data-subject value="${item.subject}"></label>
-      <label class="field"><span>Email</span><textarea class="textarea" data-body rows="14" style="line-height:1.55">${item.body_text}</textarea></label>
+      <div class="field"><span>Email</span>${richTextShell({ label: 'Email', rows: 14 })}<textarea data-body hidden>${item.body_text}</textarea></div>
       <p class="muted small" style="margin:0">Fields in {curly brackets} are filled in again when you save. The signature and "reply STOP" line are added for you. Saving puts it back in the queue for approval.</p></div>`,
     foot: html`<button class="btn" data-save>${icon('check', 'i--sm')}Save changes</button>`,
-    onMount: (d) => d.$('[data-save]').addEventListener('click', (e) => busy(e.currentTarget, () => serverApi(`/api/outbox/${item.id}`, { method: 'PATCH', body: { subject: d.$('[data-subject]').value, bodyText: d.$('[data-body]').value } }))
-      .then(() => { toast('Saved'); d.close(); ui.tab = 'pending_approval'; ui.items = null; render(el); }).catch(() => {})),
+    onMount: (d) => {
+      mountRichText(d.$('.rte-wrap'), d.$('[data-body]').value, { onChange: (text) => { d.$('[data-body]').value = text; } });
+      d.$('[data-save]').addEventListener('click', (e) => busy(e.currentTarget, () => serverApi(`/api/outbox/${item.id}`, { method: 'PATCH', body: { subject: d.$('[data-subject]').value, bodyText: d.$('[data-body]').value } }))
+      .then(() => { toast('Saved'); d.close(); ui.tab = 'pending_approval'; ui.items = null; render(el); }).catch(() => {}));
+    },
   });
 }
 

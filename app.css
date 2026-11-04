@@ -422,3 +422,14 @@ button { font: inherit; }
 .savebar--flash { animation: savebar-flash .6s ease-in-out 2; }
 @keyframes savebar-flash { 50% { box-shadow: 0 0 0 4px var(--tu-cyan-200, #9fd8ef); transform: translateY(-1px); } }
 @media (prefers-reduced-motion: reduce) { .savebar--flash { animation: none; outline: 3px solid var(--tu-cyan-200, #9fd8ef); } }
+
+/* ---- Email editor (templates, outbox) ---- */
+.rte-wrap { display: grid; gap: 6px; }
+.rte-bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.rte-btn { width: 32px; height: 30px; border: 1px solid var(--tu-chalk-300); border-radius: 8px; background: var(--surface-card); color: var(--text-strong); font: 15px/1 Arial, Helvetica, sans-serif; cursor: pointer; }
+.rte-btn:hover { background: var(--surface-subtle); }
+.rte-btn[aria-pressed="true"] { background: var(--brand-ink); border-color: var(--brand-ink); color: #fff; }
+.rte-hint { margin-left: 6px; }
+.rte { padding: 12px 14px; border: 1px solid var(--tu-chalk-300); border-radius: var(--radius-input); background: var(--surface-card); color: var(--text-strong); font: 15px/1.55 Arial, Helvetica, sans-serif; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; }
+.rte:focus { outline: 2px solid var(--tu-cyan-200, #8fd3f4); outline-offset: 1px; }
+.rte div { min-height: 1.55em; }
