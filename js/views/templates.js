@@ -31,7 +31,7 @@ export function render(el) {
     <div class="page">
       <div class="page-head">
         <div><p class="eyebrow">Email</p><h1 class="h1">Templates</h1>
-          <p class="muted" style="margin:4px 0 0">One email per step of the pipeline. Plain text: a blank line starts a new paragraph, and fields in {curly brackets} are filled in for each dealer. Add a fallback after a bar for when it's blank: {first_name|there}.</p></div>
+          <p class="muted" style="margin:4px 0 0">One email per step of the pipeline. Write and format them like any email (bold, italics, underline). Fields in {curly brackets} are filled in for each dealer; add a fallback after a bar for when it's blank: {first_name|there}.</p></div>
         <div class="page-head__actions"><button class="btn btn--outline" data-new>${icon('plus')}New template</button></div>
       </div>
       ${!emailState.saved ? html`<div class="notice notice--info">${icon('info')}<div><strong>These are the starting templates and aren't saved yet.</strong> Read them over, add your signature, then press Save on any template (or below) to switch email drafting on.
