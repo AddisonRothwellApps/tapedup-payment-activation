@@ -52,7 +52,9 @@ function suggest(x, tpl, now = Date.now()) {
   const i = infoOf(x);
   const has = (k) => (tpl.has(k) ? k : '');
   const stage = x.c ? x.st.stage : x.p.stage;
-  const since = i.lastOut ? (now - Date.parse(i.lastOut)) / DAY : Infinity;
+  // Last email from either mailbox: trade@ (the server's history) or sales@ (a prospect's last contacted date).
+  const lastOut = [i.lastOut, x.p && x.p.last_contacted].filter(Boolean).sort().pop();
+  const since = lastOut ? (now - Date.parse(lastOut)) / DAY : Infinity;
   if (i.waiting || optedOut(x) || !emailOf(x)) return '';
   if (i.lastIn && (!i.lastOut || i.lastIn > i.lastOut)) return ''; // they wrote last: answer in the thread
   // The intro sequence: intro or re-intro, then follow-up 1, then 2.
@@ -63,6 +65,7 @@ function suggest(x, tpl, now = Date.now()) {
     return null;
   };
   // A sister centre already stocks us: lead with that.
+  if (since < 30) return ''; // emailed in the last month (from sales@ too): give them a breather
   const firstTouch = sisterStocking(x) && tpl.has('sister-site') ? 'sister-site' : x.p ? (x.p.template === 'reintro' ? 'reintro' : 'intro') : 'intro';
   switch (stage) {
     case 'Prospect': { const c = chase(); return c !== null ? c : has(firstTouch); }
