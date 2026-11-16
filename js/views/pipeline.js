@@ -72,6 +72,8 @@ const templates = () => new Map(((emailState.set && emailState.set.templates) ||
 const refOf = (x) => (x.c ? x.c.id : `p${x.p.id}`);
 const infoOf = (x) => (mailUi.steps ? (x.c ? mailUi.steps.customers[x.c.id] : mailUi.steps.prospects[x.p.id]) : null) || {};
 const emailOf = (x) => (x.c ? x.c.email : x.p.email);
+/** Our last email to them bounced (and they haven't written since): the address needs fixing. */
+const bounced = (x) => { const i = infoOf(x); return !!i.bouncedAt && (!i.lastIn || i.bouncedAt > i.lastIn); };
 const optedOut = (x) => (x.c ? !!x.c.crm.optOut : !!x.p.opt_out);
 
 /** Another centre in the same group that already orders from us, if any. */
@@ -90,7 +92,7 @@ function suggest(x, tpl, now = Date.now()) {
   // Last email from either mailbox: trade@ (the server's history) or sales@ (a prospect's last contacted date).
   const lastOut = [i.lastOut, x.p && x.p.last_contacted].filter(Boolean).sort().pop();
   const since = lastOut ? (now - Date.parse(lastOut)) / DAY : Infinity;
-  if (i.waiting || optedOut(x) || !emailOf(x)) return '';
+  if (i.waiting || optedOut(x) || !emailOf(x) || bounced(x)) return '';
   if (i.lastIn && (!i.lastOut || i.lastIn > i.lastOut)) return ''; // they wrote last: answer in the thread
   // The intro sequence: intro or re-intro, then follow-up 1, then 2.
   const chase = () => {
@@ -136,6 +138,7 @@ function nextEmail(x, tpl) {
   if (i.waiting) return html`<div class="deal__next small"><span class="badge badge--cyan">${icon('inbox', 'i--sm')}In outbox</span></div>`;
   if (optedOut(x)) return html`<div class="deal__next small muted">Opted out of email</div>`;
   if (!emailOf(x)) return html`<div class="deal__next small muted">No email address</div>`;
+  if (bounced(x)) return html`<div class="deal__next small"><a class="badge badge--warn" href="${x.c ? `#/customers/${x.c.numericId}` : `#/prospects/${x.p.id}`}" title="Our last email couldn't be delivered: fix the address on their page">${icon('mail-x', 'i--sm')}Email bounced</a></div>`;
   const sug = suggest(x, tpl);
   const pick = chosen(x, tpl);
   return html`<div class="deal__next"><label for="next-${refOf(x)}" class="small muted">Next email</label>
