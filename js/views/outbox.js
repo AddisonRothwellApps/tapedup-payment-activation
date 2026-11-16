@@ -2,13 +2,14 @@
 // Nothing leaves trade@ until it's approved here (or, from phase 4, sent by
 // the agent on a step you've switched to automatic). Approving sends it
 // straight away, within the server's daily limits.
-import { state } from '../store.js';
+import { state, label } from '../store.js';
+import { prospectState, loadProspects } from '../prospects.js';
 import { html, icon, ago, toast, openDrawer, busy, loadingBlock, showEmail } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { richTextShell, mountRichText } from '../rich-text.js';
 import { TRADE_SERVER } from '../env.js';
 
-const ui = { tab: 'pending_approval', items: null, status: null, loading: false, error: '' };
+const ui = { tab: 'pending_approval', items: null, status: null, loading: false, error: '', unmatched: [] };
 const TABS = [
   ['pending_approval', 'Waiting for you'],
   ['approved,scheduled', 'Queued'],
@@ -34,8 +35,8 @@ export async function refreshOutboxStatus() {
 async function load(el) {
   ui.loading = true; ui.error = '';
   try {
-    const [list, status] = await Promise.all([serverApi(`/api/outbox?status=${encodeURIComponent(ui.tab)}`), serverApi('/api/mail/status')]);
-    ui.items = list.items; ui.status = status;
+    const [list, status, un] = await Promise.all([serverApi(`/api/outbox?status=${encodeURIComponent(ui.tab)}`), serverApi('/api/mail/status'), serverApi('/api/mail/unmatched').catch(() => ({ items: [] }))]);
+    ui.items = list.items; ui.status = status; ui.unmatched = un.items || [];
   } catch (err) { ui.error = err.message; }
   ui.loading = false;
   if (location.hash.startsWith('#/outbox')) render(el);
@@ -64,6 +65,18 @@ export function render(el) {
       </div>
       ${s && !s.enabled ? html`<div class="notice notice--warn">${icon('circle-alert')}<div><strong>Email is off.</strong> Drafts can be made and approved, but nothing sends until the trade@ mailbox is set up on the server (MS_MAILBOX and GRAPH_CLIENT_STATE in Coolify).</div></div>` : ''}
       ${s && s.enabled && !s.listening ? html`<div class="notice notice--warn">${icon('circle-alert')}<div>Not listening for replies yet. The server sets this up within a few minutes of starting; if it stays, check the Entra app has Mail.ReadWrite.</div></div>` : ''}
+      ${ui.unmatched.length ? html`<section class="card">
+        <div class="card__head"><div><h2 class="h2">Emails we couldn't match (${ui.unmatched.length})</h2>
+          <p class="muted small" style="margin:4px 0 0">From an address we don't know, in a new conversation. Say who they're from and they're handled like any reply: the agent reads them, and that address is remembered for next time.</p></div>
+          <button class="btn btn--outline btn--sm" data-rematch>${icon('refresh-cw', 'i--sm')}Check again</button></div>
+        <div class="list">${ui.unmatched.map((u) => html`<div class="list__item" style="align-items:flex-start">
+          <span class="list__main"><span class="strong">${u.subject || '(no subject)'}</span>
+            <span class="small muted">${u.from} · ${ago(u.at)}</span>
+            <span class="small">${u.preview}</span></span>
+          <span class="row" style="gap:6px;flex:none"><button class="btn btn--sm" data-assign="${u.threadId}">Assign to…</button>
+            <button class="btn btn--ghost btn--sm" data-dismiss="${u.threadId}" title="Not from a dealer: hide it">Not a dealer</button></span>
+        </div>`)}</div>
+      </section>` : ''}
       <div class="seg" role="group" aria-label="Show">${TABS.map(([key, name]) => html`<button type="button" data-tab="${key}" aria-pressed="${ui.tab === key ? 'true' : 'false'}">${name}${key === 'pending_approval' && s && s.pending ? ` (${s.pending})` : key === 'failed' && s && s.failed ? ` (${s.failed})` : ''}</button>`)}</div>
       ${ui.error ? html`<div class="notice notice--err">${icon('circle-alert')}<div>${ui.error}</div></div>`
         : !ui.items ? loadingBlock('Loading the outbox…')
@@ -93,6 +106,12 @@ export function render(el) {
   (ui.items || []).forEach((item) => showEmail(el.querySelector(`[data-frame="${item.id}"]`), item.body_html));
 
   el.querySelector('[data-refresh]').addEventListener('click', () => { ui.items = null; render(el); });
+  const rm = el.querySelector('[data-rematch]');
+  if (rm) rm.addEventListener('click', () => busy(rm, () => serverApi('/api/mail/rematch', { method: 'POST', body: {} }))
+    .then((r) => { const n = r.items.filter((x) => x.matched).length; toast(n ? `Matched ${n} email${n === 1 ? '' : 's'}` : 'Still no match: assign them by hand'); ui.items = null; render(el); window.dispatchEvent(new Event('outbox-changed')); }).catch(() => {}));
+  el.querySelectorAll('[data-dismiss]').forEach((b) => b.addEventListener('click', () => busy(b, () => serverApi(`/api/mail/unmatched/${b.dataset.dismiss}/dismiss`, { method: 'POST', body: {} }))
+    .then(() => { ui.unmatched = ui.unmatched.filter((u) => String(u.threadId) !== b.dataset.dismiss); render(el); }).catch(() => {})));
+  el.querySelectorAll('[data-assign]').forEach((b) => b.addEventListener('click', () => openAssign(el, ui.unmatched.find((u) => String(u.threadId) === b.dataset.assign))));
   el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { ui.tab = b.dataset.tab; ui.items = null; render(el); }));
   el.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', () => busy(b, () => serverApi(`/api/outbox/${b.dataset.approve}/approve`, { method: 'POST', body: {} }))
     .then((r) => {
@@ -125,6 +144,40 @@ function openRetry(el, item) {
           .then(() => { toast('New draft ready'); d.close(); ui.tab = 'pending_approval'; ui.items = null; render(el); window.dispatchEvent(new Event('outbox-changed')); })
           .catch(() => { const b = d.$('[data-go]'); if (b) b.innerHTML = String(html`${icon('sparkles', 'i--sm')}Write it again`); });
       });
+    },
+  });
+}
+
+/** Pick the customer or prospect an unmatched email is from. */
+async function openAssign(el, u) {
+  if (!prospectState.loaded) await loadProspects().catch(() => {});
+  const domain = (u.from.split('@')[1] || '').split('.')[0];
+  const pool = [
+    ...[...state.customers.values()].map((c) => ({ ref: { customerId: c.id }, name: label(c), sub: [c.email, c.city].filter(Boolean).join(' · '), kind: 'Customer' })),
+    ...prospectState.items.filter((p) => !p.customer_id).map((p) => ({ ref: { prospectId: p.id }, name: p.company, sub: [p.email, p.city].filter(Boolean).join(' · '), kind: 'Prospect' })),
+  ];
+  openDrawer({
+    eyebrow: u.from, title: 'Who is this from?', wide: true,
+    body: html`<div class="form">
+      <div class="notice notice--info">${icon('mail')}<div><strong>${u.subject || '(no subject)'}</strong><br><span class="small">${u.preview}</span></div></div>
+      <input class="input" type="search" data-q placeholder="Search customers and prospects" value="${/^(gmail|hotmail|outlook|yahoo|icloud|live|btinternet)$/.test(domain) ? '' : domain}">
+      <div class="list" data-results></div>
+    </div>`,
+    foot: html`<button class="btn btn--ghost" data-close>Cancel</button>`,
+    onMount(d) {
+      const q = d.$('[data-q]');
+      const draw = () => {
+        const term = q.value.trim().toLowerCase();
+        const hits = pool.filter((x) => !term || [x.name, x.sub].some((v) => String(v).toLowerCase().includes(term))).slice(0, 30);
+        d.$('[data-results]').innerHTML = String(hits.length ? html`${hits.map((x, i) => html`<div class="list__item">
+          <span class="list__main"><span class="strong">${x.name}</span><span class="small muted">${x.kind}${x.sub ? ` · ${x.sub}` : ''}</span></span>
+          <button class="btn btn--sm" data-pick="${i}">This one</button></div>`)}` : html`<p class="muted small" style="margin:8px 0">No customers or prospects match.</p>`);
+        d.$$('[data-pick]').forEach((b) => b.addEventListener('click', () => busy(b, () => serverApi(`/api/mail/unmatched/${u.threadId}/assign`, { method: 'POST', body: hits[Number(b.dataset.pick)].ref }))
+          .then(() => { toast(`Matched to ${hits[Number(b.dataset.pick)].name}. The agent will read it now.`); d.close(); ui.items = null; render(el); window.dispatchEvent(new Event('outbox-changed')); }).catch(() => {})));
+      };
+      q.addEventListener('input', draw);
+      draw();
+      q.focus();
     },
   });
 }
