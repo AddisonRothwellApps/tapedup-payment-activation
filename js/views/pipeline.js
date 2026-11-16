@@ -8,7 +8,7 @@
 // last sent (change it with the dropdown, or pick "Don't email"). "Bulk
 // draft" on a column drafts every card's chosen email into the Outbox, where
 // each waits for "Approve and send". Nothing is sent from here.
-import { state, PIPELINE, STAGES, stageOf, setStage, label, sublabel, lastContact, todayISO, isKeyAccount } from '../store.js';
+import { state, PIPELINE, STAGES, stageOf, setStage, label, sublabel, lastContact, todayISO, isKeyAccount, insights } from '../store.js';
 import { html, raw, icon, ago, fmtDate, dueLabel, money0, toast, armed, busy, openDrawer } from '../ui.js';
 import { prospectState, loadProspects, updateProspect } from '../prospects.js';
 import { SERVER_FEATURES, serverApi } from '../server.js';
@@ -23,6 +23,31 @@ const ui = { q: '', showClosed: false };
 // email templates, and any choice made on a card this session.
 const mailUi = { steps: null, loading: null, error: '', choice: new Map() };
 const CLOSED = new Set(['Not now', 'Lost']);
+
+// Active dealers aren't one column: they're split by how their ordering is
+// going, measured against each dealer's own usual gap between orders (about
+// 3 months for most). Nobody moves them between these: their orders do.
+const DEALER_STAGES = new Set(['Active dealer', 'Lapsed']);
+const DEALER_COLS = [
+  { key: 'New dealer', health: 'new', hint: 'First order in: check it is selling and they are happy', tone: 'new' },
+  { key: 'Thriving', health: 'active', hint: 'Ordering on their usual rhythm: nothing to do', tone: 'active' },
+  { key: 'Reorder due', health: 'due', hint: 'Past their usual gap: send a reorder reminder', tone: 'due' },
+  { key: 'Going quiet', health: 'risk', hint: 'Well overdue: check in personally', tone: 'risk' },
+  { key: 'Needs resurrecting', health: 'lapsed', hint: 'Stopped ordering: win them back', tone: 'lapsed' },
+];
+const DEALER_KEYS = new Set(DEALER_COLS.map((d) => d.key));
+const COLUMN_OF_HEALTH = Object.fromEntries(DEALER_COLS.map((d) => [d.health, d.key]));
+// The board: the sales stages, with Active dealer and Lapsed swapped for the dealer columns.
+const BOARD = PIPELINE.flatMap((p) => (p.key === 'Active dealer' ? DEALER_COLS.map((d) => ({ ...d, dealer: true })) : p.key === 'Lapsed' ? [] : [p]));
+// What a customer's menu offers: Lapsed is now a dealer column, not a stage to pick.
+const MOVE_STAGES = STAGES.filter((s) => s !== 'Lapsed');
+
+/** Which dealer column an active dealer sits in, from their orders. */
+function healthOf(c, saved, now) {
+  const s = insights(c, now).status;
+  if (s === 'lead') return saved === 'Lapsed' ? 'lapsed' : 'new'; // marked a dealer, but no orders here yet
+  return COLUMN_OF_HEALTH[s] ? s : 'active';
+}
 const DAY = 86400000;
 
 function loadMailData(el) {
@@ -51,7 +76,7 @@ function sisterStocking(x) {
 function suggest(x, tpl, now = Date.now()) {
   const i = infoOf(x);
   const has = (k) => (tpl.has(k) ? k : '');
-  const stage = x.c ? x.st.stage : x.p.stage;
+  const stage = x.c ? (x.col || x.st.stage) : x.p.stage;
   // Last email from either mailbox: trade@ (the server's history) or sales@ (a prospect's last contacted date).
   const lastOut = [i.lastOut, x.p && x.p.last_contacted].filter(Boolean).sort().pop();
   const since = lastOut ? (now - Date.parse(lastOut)) / DAY : Infinity;
@@ -77,12 +102,10 @@ function suggest(x, tpl, now = Date.now()) {
       return ci && i.lastKey !== 'sample-checkin' && (!i.sampleAt || now - Date.parse(i.sampleAt) >= (ci.delayDays || 5) * DAY) ? 'sample-checkin' : '';
     }
     case 'Account opened': return i.lastKey === 'account-walkthrough' ? '' : has('account-walkthrough');
-    case 'Active dealer': {
-      if (since < 30) return '';
-      const last = x.c.lastOrderAt ? (now - Date.parse(x.c.lastOrderAt)) / DAY : Infinity;
-      return last >= 45 && x.c.lastOrderAt ? has('reorder') : '';
-    }
-    case 'Lapsed': return since < 30 ? '' : has('winback');
+    case 'New dealer': case 'Thriving': return ''; // happy and ordering: leave them be
+    case 'Reorder due': return has('reorder');
+    case 'Going quiet': return i.lastKey === 'reorder' ? has('winback') : has('reorder');
+    case 'Needs resurrecting': return has('winback');
     case 'Not now': return since < 60 ? '' : has('reintro');
     default: return ''; // Replied (the agent drafts the answer) and Lost
   }
@@ -145,18 +168,25 @@ function daysInStage(c, now) {
 
 function cards(now) {
   const q = ui.q.trim().toLowerCase();
-  const out = new Map(STAGES.map((s) => [s, []]));
+  const out = new Map(BOARD.map((s) => [s.key, []]));
+  for (const s of STAGES) if (!out.has(s)) out.set(s, []);
   for (const c of state.customers.values()) {
     if (q && ![label(c), c.name, c.email, c.city].some((v) => String(v || '').toLowerCase().includes(q))) continue;
     const st = stageOf(c, now);
-    out.get(st.stage).push({ c, st, next: nextFollowUp(c), days: daysInStage(c, now), contact: lastContact(c) });
+    const health = DEALER_STAGES.has(st.stage) ? healthOf(c, st.stage, now) : null;
+    const col = health ? COLUMN_OF_HEALTH[health] : null;
+    out.get(col || st.stage).push({ c, st, health, col, next: nextFollowUp(c), days: col ? null : daysInStage(c, now), contact: lastContact(c), since: col ? insights(c, now).daysSince : null });
   }
   for (const p of prospectState.items) {
     if (q && ![p.company, p.contact, p.email, p.city].some((v) => String(v || '').toLowerCase().includes(q))) continue;
     if (out.has(p.stage)) out.get(p.stage).push({ p, days: Math.floor((now - Date.parse(p.updated_at || p.created_at)) / DAY), contact: p.last_contacted });
   }
   const today = todayISO();
-  for (const list of out.values()) {
+  for (const [key, list] of out) {
+    if (DEALER_KEYS.has(key)) {
+      list.sort((a, b) => (key === 'Thriving' || key === 'New dealer' ? (b.c.amountSpent || 0) - (a.c.amountSpent || 0) : (b.since ?? -1) - (a.since ?? -1)) || label(a.c).localeCompare(label(b.c)));
+      continue;
+    }
     list.sort((a, b) => {
       const ao = a.next && a.next <= today, bo = b.next && b.next <= today;
       if (ao !== bo) return ao ? -1 : 1;
@@ -198,13 +228,15 @@ const REORDER_DUE = 75;
 const REORDER_LATE = 90;
 
 /** When they last ordered, coloured by how close they are to their usual 3-monthly reorder. */
-function lastOrderChip(c, contact) {
+function lastOrderChip(c, contact, health) {
   const at = c.lastOrderAt;
   const tip = contact ? ` · last contact ${ago(contact)}` : '';
   if (!at) return html`<span class="small muted" title="No orders yet${tip}">${icon('receipt', 'i--sm')}No orders yet</span>`;
   const days = Math.floor((Date.now() - Date.parse(at)) / DAY);
-  const kind = days >= REORDER_LATE ? 'followup--overdue' : days >= REORDER_DUE ? 'followup--today' : '';
-  return html`<span class="followup ${kind}" title="Last order ${fmtDate(at)}${days >= REORDER_LATE ? ': past their usual 3-monthly reorder' : days >= REORDER_DUE ? ': reorder due soon' : ''}${tip}">${icon('receipt', 'i--sm')}Ordered ${ago(at)}</span>`;
+  const late = health ? health === 'risk' || health === 'lapsed' : days >= REORDER_LATE;
+  const soon = health ? health === 'due' : days >= REORDER_DUE;
+  const kind = late ? 'followup--overdue' : soon ? 'followup--today' : '';
+  return html`<span class="followup ${kind}" title="Last order ${fmtDate(at)}${late ? ': well past their usual reorder' : soon ? ': reorder due' : ''}${tip}">${icon('receipt', 'i--sm')}Ordered ${ago(at)}</span>`;
 }
 
 function groupBadge(x) {
@@ -216,7 +248,7 @@ function groupBadge(x) {
 
 function card(x, today, tpl) {
   if (x.p) return prospectCard(x, tpl);
-  const { c, st, next, days, contact } = x;
+  const { c, st, next, days, contact, health } = x;
   const due = next ? dueLabel(next, today) : null;
   return html`
     <article class="deal" draggable="true" data-id="${c.id}" aria-label="${label(c)}">
@@ -225,12 +257,13 @@ function card(x, today, tpl) {
       <div class="deal__meta">
         ${due ? html`<span class="followup ${due.kind ? `followup--${due.kind}` : ''}" title="Next follow-up ${fmtDate(next)}">${icon('calendar', 'i--sm')}${due.text}</span>` : ''}
         ${contactChip(x) || html`<span class="small muted">${icon('send', 'i--sm')}Not contacted</span>`}
-        ${lastOrderChip(c, contact)}
+        ${lastOrderChip(c, contact, health)}
         ${c.amountSpent ? html`<span class="small muted" title="Lifetime spend">${money0(c.amountSpent)}</span>` : ''}
       </div>
       ${nextEmail(x, tpl)}
       <div class="deal__foot">
         <span class="row" style="gap:4px">
+          ${health ? html`<span class="badge badge--active" title="An active dealer: this column follows their orders">Active</span>` : ''}
           ${st.guessed ? html`<span class="badge" title="Not set yet: guessed from their orders">Suggested</span>` : ''}
           ${isKeyAccount(c) ? html`<span class="badge badge--accent">Key account</span>` : ''}
           ${groupBadge(x)}
@@ -238,7 +271,7 @@ function card(x, today, tpl) {
         </span>
         <label class="deal__move"><span class="visually-hidden">Move ${label(c)} to</span>
           <select class="select input--sm" data-move="${c.id}">
-            ${STAGES.map((s) => html`<option ${s === st.stage ? raw('selected') : ''}>${s}</option>`)}
+            ${MOVE_STAGES.map((s) => html`<option ${s === (DEALER_STAGES.has(st.stage) ? 'Active dealer' : st.stage) ? raw('selected') : ''}>${s}</option>`)}
           </select></label>
       </div>
     </article>`;
@@ -251,16 +284,18 @@ export function render(el) {
   const now = Date.now();
   const today = todayISO();
   const byStage = cards(now);
-  const cols = PIPELINE.filter((p) => ui.showClosed || !CLOSED.has(p.key));
-  const open = PIPELINE.filter((p) => !CLOSED.has(p.key) && p.key !== 'Active dealer' && p.key !== 'Lapsed')
+  const cols = BOARD.filter((p) => ui.showClosed || !CLOSED.has(p.key));
+  const open = BOARD.filter((p) => !CLOSED.has(p.key) && !p.dealer)
     .reduce((n, p) => n + byStage.get(p.key).filter((x) => x.c).length, 0);
+  const n = (k) => byStage.get(k).length;
+  const dealers = DEALER_COLS.reduce((t, d) => t + n(d.key), 0);
   const unset = [...byStage.values()].flat().filter((x) => x.st && x.st.guessed).length;
 
   el.innerHTML = String(html`
     <div class="page page--wide">
       <div class="page-head">
         <div><p class="eyebrow">Sales</p><h1 class="h1">Pipeline</h1>
-          <p class="muted" style="margin:4px 0 0">${open} in progress · ${prospectState.items.length ? `${prospectState.items.length} cold prospects · ` : ''}${byStage.get('Active dealer').filter((x) => x.c).length} active dealers · ${byStage.get('Lapsed').length} lapsed</p></div>
+          <p class="muted" style="margin:4px 0 0">${open} in progress · ${prospectState.items.length ? `${prospectState.items.length} cold prospects · ` : ''}${dealers} active dealers: ${n('Thriving') + n('New dealer')} doing well, ${n('Reorder due')} due a reorder, ${n('Going quiet')} going quiet, ${n('Needs resurrecting')} to resurrect</p></div>
         <div class="page-head__actions row row--wrap">
           <input class="input input--sm" type="search" placeholder="Search accounts" value="${ui.q}" data-q aria-label="Search accounts" style="width:220px">
           <label class="check"><input type="checkbox" data-closed ${ui.showClosed ? raw('checked') : ''}><span>Show Not now and Lost</span></label>
@@ -269,8 +304,9 @@ export function render(el) {
       ${unset ? html`<div class="notice notice--info">${icon('info')}<div>${unset} account${unset === 1 ? ' has' : 's have'} no stage set, so they're placed from their orders and marked <strong>Suggested</strong>. Move a card to confirm it.</div></div>` : ''}
       <div class="board" role="list">
         ${cols.map((p) => { const list = byStage.get(p.key); return html`
-          <section class="board__col" role="listitem" data-stage="${p.key}" aria-label="${p.key}, ${list.length}">
+          <section class="board__col ${p.dealer ? 'board__col--dealer' : ''}" role="listitem" data-stage="${p.key}" aria-label="${p.dealer ? 'Active dealers: ' : ''}${p.key}, ${list.length}">
             <header class="board__head">
+              ${p.dealer ? html`<p class="board__group small">${icon('store', 'i--sm')}Active dealers</p>` : ''}
               <div class="row" style="justify-content:space-between"><h2 class="board__title"><span class="status status--${p.tone}"></span>${p.key}</h2><span class="board__count">${list.length}</span></div>
               <p class="small muted board__hint">${p.hint}</p>
               ${SERVER_FEATURES && mailUi.steps ? (() => { const n = list.filter((x) => chosen(x, tpl) && !infoOf(x).waiting && emailOf(x) && !optedOut(x)).length; return html`
@@ -284,8 +320,14 @@ export function render(el) {
       </div>
     </div>`);
 
-  const move = async (id, stage) => {
+  const move = async (id, target) => {
     const c = state.customers.get(id);
+    const stage = DEALER_KEYS.has(target) ? 'Active dealer' : target;
+    if (c && DEALER_KEYS.has(target) && DEALER_STAGES.has(stageOf(c).stage) && !stageOf(c).guessed) {
+      toast('Dealer columns follow their orders, so they move on their own');
+      render(el);
+      return;
+    }
     if (!c || stageOf(c).stage === stage && !stageOf(c).guessed) return;
     try {
       await setStage(c, stage);
