@@ -206,10 +206,10 @@ Cheers,`,
     },
     {
       key: 'reorder', name: 'Reorder reminder', stage: 'Active dealer', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'friendly', offerTemplateId: '', active: true,
-      subject: 'Running low on {usual_tapes}?',
+      subject: 'Running low on tape?',
       body: `Hi {first_name|there},
 
-It's been a little while since {gym_name}'s last order on {last_order_date}, so I thought I'd check in. Running low on {usual_tapes}?
+It's been a little while since {gym_name}'s last order on {last_order_date}, so I thought I'd check in. Running low on tape?
 
 If you want the same again, just reply and I'll sort it, or order any time at tapedup.co.uk.
 
