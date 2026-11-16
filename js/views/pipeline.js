@@ -25,15 +25,14 @@ const mailUi = { steps: null, loading: null, error: '', choice: new Map() };
 const CLOSED = new Set(['Not now', 'Lost']);
 
 // Active dealers aren't one column: they're split by how their ordering is
-// going, measured against each dealer's own usual gap between orders (about
-// 3 months for most). Nobody moves them between these: their orders do.
+// going, measured against the usual 3-monthly reorder. Nobody moves them between these: their orders do.
 const DEALER_STAGES = new Set(['Active dealer', 'Lapsed']);
 const DEALER_COLS = [
   { key: 'New dealer', health: 'new', hint: 'First order in: check it is selling and they are happy', tone: 'new' },
-  { key: 'Thriving', health: 'active', hint: 'Ordering on their usual rhythm: nothing to do', tone: 'active' },
-  { key: 'Reorder due', health: 'due', hint: 'Past their usual gap: send a reorder reminder', tone: 'due' },
-  { key: 'Going quiet', health: 'risk', hint: 'Well overdue: check in personally', tone: 'risk' },
-  { key: 'Needs resurrecting', health: 'lapsed', hint: 'Stopped ordering: win them back', tone: 'lapsed' },
+  { key: 'Thriving', health: 'active', hint: 'Ordered in the last 75 days: nothing to do', tone: 'active' },
+  { key: 'Reorder due', health: 'due', hint: '75 days to 4 months: send a reorder reminder', tone: 'due' },
+  { key: 'Going quiet', health: 'risk', hint: '4 to 8 months: check in personally', tone: 'risk' },
+  { key: 'Needs resurrecting', health: 'lapsed', hint: 'Over 8 months: win them back', tone: 'lapsed' },
 ];
 const DEALER_KEYS = new Set(DEALER_COLS.map((d) => d.key));
 const COLUMN_OF_HEALTH = Object.fromEntries(DEALER_COLS.map((d) => [d.health, d.key]));
@@ -42,11 +41,22 @@ const BOARD = PIPELINE.flatMap((p) => (p.key === 'Active dealer' ? DEALER_COLS.m
 // What a customer's menu offers: Lapsed is now a dealer column, not a stage to pick.
 const MOVE_STAGES = STAGES.filter((s) => s !== 'Lapsed');
 
+// Dealers usually reorder about every 3 months, so the columns are measured in days since their last order.
+const THRIVING_UNTIL = 75;   // within their usual reorder
+const DUE_UNTIL = 120;       // a reorder is due (to 4 months)
+const QUIET_UNTIL = 240;     // going quiet (to 8 months); after that they need resurrecting
+const NEW_FOR = 90;          // a first order in the last 3 months: a new dealer
+
 /** Which dealer column an active dealer sits in, from their orders. */
 function healthOf(c, saved, now) {
-  const s = insights(c, now).status;
-  if (s === 'lead') return saved === 'Lapsed' ? 'lapsed' : 'new'; // marked a dealer, but no orders here yet
-  return COLUMN_OF_HEALTH[s] ? s : 'active';
+  const { daysSince, orders } = insights(c, now);
+  if (daysSince == null) return saved === 'Lapsed' ? 'lapsed' : 'new'; // marked a dealer, but no orders here yet
+  const count = Math.max(c.numberOfOrders || 0, orders.length);
+  if (count <= 1 && daysSince <= NEW_FOR) return 'new';
+  if (daysSince <= THRIVING_UNTIL) return 'active';
+  if (daysSince <= DUE_UNTIL) return 'due';
+  if (daysSince <= QUIET_UNTIL) return 'risk';
+  return 'lapsed';
 }
 const DAY = 86400000;
 
