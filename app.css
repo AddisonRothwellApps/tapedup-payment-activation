@@ -446,3 +446,5 @@ button { font: inherit; }
 .badge--active { background: var(--tu-cyan-050); border-color: var(--state-success); color: var(--text-strong); }
 .board__col--dealer { background: var(--surface-card); }
 .board__group { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font: var(--weight-bold) 10px/1 var(--font-body); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted, inherit); }
+
+.badge--warn { background: var(--surface-card); border-color: var(--state-danger); color: var(--state-danger); }
