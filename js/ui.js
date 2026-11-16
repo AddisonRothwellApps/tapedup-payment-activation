@@ -263,3 +263,15 @@ export function showEmail(frame, htmlSource) {
   };
   frame.srcdoc = htmlSource;
 }
+
+/**
+ * The readable start of an email for a timeline: drops the hidden inbox
+ * preview line (and its &#8204; padding) and the quoted earlier email.
+ */
+export function emailExcerpt(text, max = 400) {
+  let t = String(text || '');
+  const pad = t.lastIndexOf('&#8204;');
+  if (pad >= 0) t = t.slice(pad + 7);
+  t = t.replace(/(&#8204;|\u200c|&nbsp;)/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+  return t.split(/\n\s*(On .+ wrote:|From:|-----Original)/)[0].replace(/^\s+/, '').trim().slice(0, max);
+}

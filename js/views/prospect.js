@@ -2,7 +2,7 @@
 // Details you can edit in place, notes (newest first), extra email addresses,
 // every email with them, and a quick "draft an email" picker. Once they reply
 // they become a customer and get the full customer page.
-import { html, raw, icon, ago, fmtDate, toast, busy, loadingBlock } from '../ui.js';
+import { html, raw, icon, ago, fmtDate, toast, busy, loadingBlock, emailExcerpt } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { prospectState, loadProspects, updateProspect } from '../prospects.js';
 import { emailState, loadEmailTemplates } from '../email-templates.js';
@@ -83,7 +83,7 @@ export function render(el, idParam) {
               <div class="tl"><span class="tl__icon">${icon(m.direction === 'out' ? 'send' : 'mail', 'i--sm')}</span>
                 <div class="tl__body"><div class="tl__meta"><span class="strong">${m.direction === 'out' ? 'Sent' : `From ${m.from_address}`}</span><span>${ago(m.sent_at)}${m.auto_reply ? ' · auto-reply' : ''}</span></div>
                   <div class="small strong">${m.subject || '(no subject)'}</div>
-                  <div class="tl__text small email-excerpt">${String(m.body_text || '').split(/\n\s*(On .+ wrote:|From:|-----Original)/)[0].trim().slice(0, 400)}</div></div></div>`)}</div>
+                  <div class="tl__text small email-excerpt">${emailExcerpt(m.body_text)}</div></div></div>`)}</div>
               ${messages.length > FIRST ? html`<div style="padding:4px 16px 14px"><button class="btn btn--ghost btn--sm" data-more>${ui.showAll ? `Show the latest ${FIRST}` : `View all ${messages.length}`}</button></div>` : ''}`
               : html`<div class="empty" style="padding:16px">${icon('mail')}<span>No emails from trade@ yet. Earlier emails from sales@ are summed up in the notes.</span></div>`}
           </section>

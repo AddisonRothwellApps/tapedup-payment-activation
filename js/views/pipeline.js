@@ -175,7 +175,7 @@ function prospectCard(x, tpl) {
       <a class="deal__name" href="#/prospects/${p.id}">${p.company}</a>
       <div class="deal__sub small muted">${[p.contact, p.city].filter(Boolean).join(' · ') || '—'}</div>
       <div class="deal__meta">
-        ${contactChip(x) || html`<span class="small muted">${p.email ? 'Not emailed yet' : 'No email address'}</span>`}
+        ${contactChip(x) || html`<span class="small muted">${icon('send', 'i--sm')}Not contacted yet</span>`}
       </div>
       ${nextEmail(x, tpl)}
       <div class="deal__foot">
