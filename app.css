@@ -433,3 +433,8 @@ button { font: inherit; }
 .rte { padding: 12px 14px; border: 1px solid var(--tu-chalk-300); border-radius: var(--radius-input); background: var(--surface-card); color: var(--text-strong); font: 15px/1.55 Arial, Helvetica, sans-serif; overflow-wrap: anywhere; max-height: 60vh; overflow-y: auto; }
 .rte:focus { outline: 2px solid var(--tu-cyan-200, #8fd3f4); outline-offset: 1px; }
 .rte div { min-height: 1.55em; }
+
+/* Pipeline card: template picker with its own Draft button */
+.deal__send { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.deal__send .select { flex: 1; min-width: 0; }
+.deal__send .btn { flex: none; }

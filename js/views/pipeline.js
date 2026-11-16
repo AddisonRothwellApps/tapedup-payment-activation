@@ -105,11 +105,14 @@ function nextEmail(x, tpl) {
   if (!emailOf(x)) return html`<div class="deal__next small muted">No email address</div>`;
   const sug = suggest(x, tpl);
   const pick = chosen(x, tpl);
-  return html`<label class="deal__next"><span class="small muted">Next email</span>
-    <select class="select input--sm" data-next="${refOf(x)}" aria-label="Next email for ${name}">
-      <option value="" ${pick === '' ? raw('selected') : ''}>Don't email${sug === '' ? ' (suggested)' : ''}</option>
-      ${[...tpl.values()].map((t) => html`<option value="${t.key}" ${pick === t.key ? raw('selected') : ''}>${t.name || t.key}${t.key === sug ? ' (suggested)' : ''}</option>`)}
-    </select></label>`;
+  return html`<div class="deal__next"><label for="next-${refOf(x)}" class="small muted">Next email</label>
+    <div class="deal__send">
+      <select class="select input--sm" id="next-${refOf(x)}" data-next="${refOf(x)}" aria-label="Next email for ${name}">
+        <option value="" ${pick === '' ? raw('selected') : ''}>Don't email${sug === '' ? ' (suggested)' : ''}</option>
+        ${[...tpl.values()].map((t) => html`<option value="${t.key}" ${pick === t.key ? raw('selected') : ''}>${t.name || t.key}${t.key === sug ? ' (suggested)' : ''}</option>`)}
+      </select>
+      <button type="button" class="btn btn--sm" data-draft1="${refOf(x)}" ${pick ? '' : raw('disabled')} title="Draft this email into the Outbox for approval">${icon('mail', 'i--sm')}Draft</button>
+    </div></div>`;
 }
 
 async function bulkDraft(el, stage, list, tpl) {
@@ -169,10 +172,10 @@ function prospectCard(x, tpl) {
   const { p, contact } = x;
   return html`
     <article class="deal deal--prospect" aria-label="${p.company}">
-      <a class="deal__name" href="#/prospects">${p.company}</a>
+      <a class="deal__name" href="#/prospects/${p.id}">${p.company}</a>
       <div class="deal__sub small muted">${[p.contact, p.city].filter(Boolean).join(' · ') || '—'}</div>
       <div class="deal__meta">
-        ${contact ? html`<span class="small muted" title="Last emailed">${icon('send', 'i--sm')}${ago(contact)}</span>` : html`<span class="small muted">${p.email ? 'Not emailed yet' : 'No email address'}</span>`}
+        ${contactChip(x) || html`<span class="small muted">${p.email ? 'Not emailed yet' : 'No email address'}</span>`}
       </div>
       ${nextEmail(x, tpl)}
       <div class="deal__foot">
@@ -181,6 +184,13 @@ function prospectCard(x, tpl) {
           <select class="select input--sm" data-pmove="${p.id}">${PROSPECT_STAGES.map((s) => html`<option ${s === p.stage ? raw('selected') : ''}>${s}</option>`)}</select></label>
       </div>
     </article>`;
+}
+
+/** When we last emailed or spoke to them: their timeline, trade@ and (prospects) sales@. */
+function contactChip(x) {
+  const i = SERVER_FEATURES && mailUi.steps ? infoOf(x) : {};
+  const at = [x.contact, i.lastOut].filter(Boolean).sort().pop();
+  return at ? html`<span class="small muted" title="Last contacted ${fmtDate(at)}">${icon('send', 'i--sm')}Contacted ${ago(at)}</span>` : '';
 }
 
 // Dealers usually reorder about every 3 months: amber from 75 days, red from 90.
@@ -214,6 +224,7 @@ function card(x, today, tpl) {
       <div class="deal__sub small muted">${sublabel(c) || c.city || '—'}</div>
       <div class="deal__meta">
         ${due ? html`<span class="followup ${due.kind ? `followup--${due.kind}` : ''}" title="Next follow-up ${fmtDate(next)}">${icon('calendar', 'i--sm')}${due.text}</span>` : ''}
+        ${contactChip(x) || html`<span class="small muted">${icon('send', 'i--sm')}Not contacted</span>`}
         ${lastOrderChip(c, contact)}
         ${c.amountSpent ? html`<span class="small muted" title="Lifetime spend">${money0(c.amountSpent)}</span>` : ''}
       </div>
@@ -300,6 +311,22 @@ export function render(el) {
 
   // Next email: remember the choice for this session and refresh the column's count.
   el.querySelectorAll('[data-next]').forEach((s) => s.addEventListener('change', () => { mailUi.choice.set(s.dataset.next, s.value); render(el); }));
+  // One card's Draft button: that email goes to the Outbox for approval.
+  const all = [...byStage.values()].flat();
+  el.querySelectorAll('[data-draft1]').forEach((b) => b.addEventListener('click', () => {
+    const x = all.find((y) => refOf(y) === b.dataset.draft1);
+    const key = x && chosen(x, tpl);
+    if (!x || !key) return;
+    const name = x.c ? label(x.c) : x.p.company;
+    busy(b, () => serverApi('/api/outbox/bulk', { method: 'POST', body: { items: [x.c ? { customerId: x.c.id, templateKey: key } : { prospectId: x.p.id, templateKey: key }] } }))
+      .then((r) => {
+        if (r.failed && r.failed.length) { toast(`${name}: ${r.failed[0].reason}`, 'err'); return; }
+        toast(`Drafted "${(tpl.get(key) || {}).name || key}" for ${name}: it's in the Outbox`);
+        window.dispatchEvent(new Event('outbox-changed'));
+        mailUi.steps = null; mailUi.choice.delete(b.dataset.draft1);
+        loadMailData(el);
+      }).catch(() => {});
+  }));
   el.querySelectorAll('[data-bulk]').forEach((b) => armed(b, () => busy(b, () => bulkDraft(el, b.dataset.bulk, byStage.get(b.dataset.bulk), tpl)).catch(() => {}),
     `Click again: draft ${b.textContent.match(/\d+/)?.[0] || ''} emails`));
 

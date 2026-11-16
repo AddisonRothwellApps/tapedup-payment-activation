@@ -67,7 +67,7 @@ export function render(el) {
           <th>Company</th><th>Email</th><th>Town</th><th>Template</th><th>Priority</th><th>Stage</th><th></th></tr></thead>
         <tbody>${list.slice(0, 400).map((p) => html`<tr>
           <td>${p.email && !p.opt_out ? html`<input type="checkbox" data-sel="${p.id}" aria-label="Select ${p.company}" ${ui.selected.has(p.id) ? raw('checked') : ''}>` : ''}</td>
-          <td><div class="strong">${p.company}</div><div class="small muted">${p.group_id && groupById(p.group_id) ? html`<a href="#/groups/${p.group_id}" title="Part of a group">${icon('building-2', 'i--sm')}${groupById(p.group_id).name}</a>${p.contact || p.notion_url ? ' · ' : ''}` : ''}${p.contact || ''}${p.contact && p.notion_url ? ' · ' : ''}${p.notion_url ? html`<a href="${p.notion_url}" target="_blank" rel="noopener">Notion</a>` : ''}</div></td>
+          <td><a class="strong" href="#/prospects/${p.id}">${p.company}</a><div class="small muted">${p.group_id && groupById(p.group_id) ? html`<a href="#/groups/${p.group_id}" title="Part of a group">${icon('building-2', 'i--sm')}${groupById(p.group_id).name}</a>${p.contact || p.notion_url ? ' · ' : ''}` : ''}${p.contact || ''}${p.contact && p.notion_url ? ' · ' : ''}${p.notion_url ? html`<a href="${p.notion_url}" target="_blank" rel="noopener">Notion</a>` : ''}</div></td>
           <td class="small">${p.email || html`<span class="status status--due">No email</span>`}</td>
           <td class="small">${p.city || ''}</td>
           <td class="small">${p.template === 'reintro' ? 'Re-introduction' : 'Intro'}</td>
@@ -178,7 +178,7 @@ function openEdit(p, done) {
 }
 
 /** Two prospects for the same centre: this one stays, the other's email becomes an extra address on it. */
-function openMergeProspect(p, done) {
+export function openMergeProspect(p, done) {
   const others = prospectState.items.filter((x) => x.id !== p.id && !x.customer_id);
   const domain = String(p.email || '').split('@')[1] || '';
   openDrawer({
