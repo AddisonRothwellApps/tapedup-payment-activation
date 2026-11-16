@@ -239,7 +239,8 @@ const REORDER_LATE = 90;
 
 /** When they last ordered, coloured by how close they are to their usual 3-monthly reorder. */
 function lastOrderChip(c, contact, health) {
-  const at = c.lastOrderAt;
+  // From the synced order history (Shopify's own "last order" can be stale after imports and merges); samples don't count.
+  const at = insights(c).lastAt;
   const tip = contact ? ` · last contact ${ago(contact)}` : '';
   if (!at) return html`<span class="small muted" title="No orders yet${tip}">${icon('receipt', 'i--sm')}No orders yet</span>`;
   const days = Math.floor((Date.now() - Date.parse(at)) / DAY);
