@@ -15,6 +15,7 @@ import * as knowledge from './views/knowledge.js';
 import * as templates from './views/templates.js';
 import * as customer from './views/customer.js';
 import * as groups from './views/groups.js';
+import * as prospectView from './views/prospect.js';
 import * as orders from './views/orders.js';
 import * as offers from './views/offers.js';
 import * as followups from './views/followups.js';
@@ -41,6 +42,7 @@ const ROUTES = [
   { nav: 'dashboard', re: /^\/?$/, view: dashboard },
   { nav: 'pipeline', re: /^\/pipeline$/, view: pipeline },
   { nav: 'prospects', re: /^\/prospects$/, view: prospects },
+  { nav: 'prospects', re: /^\/prospects\/(\d+)$/, view: prospectView },
   { nav: 'customers', re: /^\/customers$/, view: customers },
   { nav: 'customers', re: /^\/customers\/(\d+)$/, view: customer },
   { nav: 'groups', re: /^\/groups$/, view: groups },
