@@ -438,3 +438,6 @@ button { font: inherit; }
 .deal__send { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .deal__send .select { flex: 1; min-width: 0; }
 .deal__send .btn { flex: none; }
+
+/* hidden always wins (fields use display:grid, which would otherwise show them) */
+[hidden] { display: none !important; }

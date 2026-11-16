@@ -3,7 +3,7 @@
 // template lives in Quick actions (draftPickerShell / mountDraftPicker). Loaded from the trade
 // server, so it only works at trade.tapedup.co.uk; inside Shopify admin it
 // links there instead.
-import { html, icon, ago, toast, busy, loadingBlock } from '../ui.js';
+import { html, icon, ago, toast, busy, loadingBlock, emailExcerpt } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { emailState, loadEmailTemplates } from '../email-templates.js';
 import { stageOf } from '../store.js';
@@ -55,7 +55,7 @@ export async function mountEmailCard(card, c) {
       <div class="tl"><span class="tl__icon">${icon(m.direction === 'out' ? 'send' : 'mail', 'i--sm')}</span>
         <div class="tl__body"><div class="tl__meta"><span class="strong">${m.direction === 'out' ? 'Sent' : 'Received'}</span><span>${ago(m.sent_at)}${m.auto_reply ? ' · auto-reply' : ''}${m.classification === 'opt-out' ? ' · opted out' : ''}</span></div>
           <div class="small strong">${m.subject}</div>
-          <div class="tl__text small email-excerpt">${String(m.body_text || '').split(/\n\s*(On .+ wrote:|From:|-----Original)/)[0].trim().slice(0, 400)}</div></div></div>`)}</div>
+          <div class="tl__text small email-excerpt">${emailExcerpt(m.body_text)}</div></div></div>`)}</div>
       ${data.messages.length > FIRST ? html`<button class="btn btn--ghost btn--sm" style="margin-top:8px" data-all>${all ? 'Show the latest 5' : `View all ${data.messages.length} emails`}</button>` : ''}`
       : html`<p class="muted small" style="margin:0">No emails with this dealer yet.</p>`}`);
   const toggle = body.querySelector('[data-all]');
