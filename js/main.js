@@ -17,6 +17,8 @@ import * as customer from './views/customer.js';
 import * as groups from './views/groups.js';
 import * as prospectView from './views/prospect.js';
 import * as orders from './views/orders.js';
+import * as products from './views/products.js';
+import * as margins from './views/margins.js';
 import * as offers from './views/offers.js';
 import * as followups from './views/followups.js';
 import * as setup from './views/setup.js';
@@ -33,6 +35,8 @@ const NAV = [
   { key: 'agent', href: '#/agent', label: 'Agent', icon: 'sparkles' },
   { key: 'knowledge', href: '#/knowledge', label: 'Knowledge base', icon: 'book-open' },
   { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
+  { key: 'products', href: '#/products', label: 'Products', icon: 'package' },
+  { key: 'margins', href: '#/margins', label: 'Margins', icon: 'chart-pie' },
   { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
   { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
   { key: 'setup', href: '#/setup', label: 'Setup', icon: 'settings' },
@@ -52,6 +56,8 @@ const ROUTES = [
   { nav: 'agent', re: /^\/agent$/, view: agent },
   { nav: 'knowledge', re: /^\/knowledge$/, view: knowledge },
   { nav: 'orders', re: /^\/orders$/, view: orders },
+  { nav: 'products', re: /^\/products$/, view: products },
+  { nav: 'margins', re: /^\/margins$/, view: margins },
   { nav: 'offers', re: /^\/offers$/, view: offers },
   { nav: 'follow-ups', re: /^\/follow-ups$/, view: followups },
   { nav: 'setup', re: /^\/setup$/, view: setup },
