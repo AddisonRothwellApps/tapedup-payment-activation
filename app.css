@@ -708,5 +708,5 @@ input[type="search"].input { border-radius: var(--radius-pill); padding-left: 16
 .wf--total { border-bottom: 1px solid var(--ink) !important; }
 
 /* Dashboard: Needs a nudge actions */
-.nudge__cell { min-width: 250px; }
-.nudge__send .select { max-width: 190px; }
+.nudge__cell { min-width: 300px; }
+.nudge__send .select { max-width: 230px; min-width: 200px; }
