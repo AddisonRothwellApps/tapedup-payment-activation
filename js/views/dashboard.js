@@ -48,7 +48,7 @@ function profitStat() {
   const missing = profit.cur ? profit.cur.byType.trade.incomplete : 0;
   return html`<div class="stat"><span class="stat__label">Profit</span>
     <span class="stat__value">${c ? money0(c.profit) : profit.error ? '—' : '…'}</span>
-    <span class="stat__sub">${c ? html`${c.margin != null ? html`<span class="strong">${Math.round(c.margin * 100)}%</span> margin · ` : ''}${delta(c.profit, p ? p.profit : 0, { money: true })}` : profit.error ? html`<a href="#/margins">Couldn't load</a>` : 'Working it out…'}</span>
+    <span class="stat__sub">${c ? html`${c.margin != null ? html`<span class="strong">${Math.round(c.margin * 100)}%</span> margin · ` : ''}${p && p.orders ? delta(c.profit, p.profit, { money: true }) : html`<span title="The period before has no orders with costs to compare">no earlier figure</span>`}` : profit.error ? html`<a href="#/margins">Couldn't load</a>` : 'Working it out…'}</span>
     ${c ? html`<span class="stat__sub"><a href="#/margins">All sales ${money0(all.profit)}</a>${missing ? html` · <span title="Imported invoices or products with no cost">${missing} without costs</span>` : ''}</span>` : ''}
   </div>`;
 }
