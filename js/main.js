@@ -36,7 +36,7 @@ const NAV = [
   { key: 'knowledge', href: '#/knowledge', label: 'Knowledge base', icon: 'book-open' },
   { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
   { key: 'products', href: '#/products', label: 'Products', icon: 'package' },
-  { key: 'margins', href: '#/margins', label: 'Margins', icon: 'chart-pie' },
+  { key: 'margins', href: '#/margins', label: 'Margins', icon: 'percent' },
   { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
   { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
   { key: 'setup', href: '#/setup', label: 'Setup', icon: 'settings' },
