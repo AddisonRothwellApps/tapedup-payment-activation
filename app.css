@@ -448,3 +448,9 @@ button { font: inherit; }
 .board__group { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font: var(--weight-bold) 10px/1 var(--font-body); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-muted, inherit); }
 
 .badge--warn { background: var(--surface-card); border-color: var(--state-danger); color: var(--state-danger); }
+
+/* Outbox: the email a draft is answering */
+.reply-to { border: 1px solid var(--border-subtle); border-radius: var(--radius-card, 12px); background: var(--surface-subtle); padding: 10px 14px; margin-bottom: 12px; }
+.reply-to--in { border-left: 3px solid var(--brand-primary); }
+.reply-to summary { cursor: pointer; overflow-wrap: anywhere; }
+.reply-to__body { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; max-height: 320px; overflow: auto; color: var(--text-strong); }

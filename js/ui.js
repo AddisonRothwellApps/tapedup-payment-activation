@@ -269,9 +269,11 @@ export function showEmail(frame, htmlSource) {
  * preview line (and its &#8204; padding) and the quoted earlier email.
  */
 export function emailExcerpt(text, max = 400) {
-  let t = String(text || '');
+  // Their new words first: everything above the quoted earlier email.
+  let t = String(text || '').split(/\n\s*(?:On .+ wrote:|From:|-----Original|_{8,})/)[0];
+  // Our own emails start with a hidden inbox-preview line padded with &#8204;: drop it.
   const pad = t.lastIndexOf('&#8204;');
-  if (pad >= 0) t = t.slice(pad + 7);
-  t = t.replace(/(&#8204;|\u200c|&nbsp;)/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
-  return t.split(/\n\s*(On .+ wrote:|From:|-----Original)/)[0].replace(/^\s+/, '').trim().slice(0, max);
+  if (pad >= 0 && pad < 2000) t = t.slice(pad + 7);
+  t = t.replace(/(&#8204;|‌|&nbsp;)/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+  return t.replace(/^\s+/, '').trim().slice(0, max);
 }
