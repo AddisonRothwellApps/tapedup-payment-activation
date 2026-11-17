@@ -77,8 +77,8 @@ export function render(el) {
         </div>
         <div class="grid grid--side" style="margin-bottom:20px">
           <section class="card">
-            <div class="card__head"><h2 class="h2">Where the money goes</h2><span class="small muted">${fmtDate(d.from)} to ${fmtDate(d.to)}${t.incomplete ? ` · the ${c.orders} orders with costs` : ''}</span></div>
-            ${c.orders ? waterfall(c) : html`<p class="muted small">Add product costs on <a href="#/products">Products</a> and the breakdown fills in.</p>`}
+            <div class="card__head"><h2 class="h2">P&amp;L</h2><span class="small muted">${fmtDate(d.from)} to ${fmtDate(d.to)}${t.incomplete ? ` · the ${c.orders} orders with costs` : ''}</span></div>
+            ${c.orders ? pnl(c, d.samples) : html`<p class="muted small">Add product costs on <a href="#/products">Products</a> and the breakdown fills in.</p>`}
           </section>
           <section class="card">
             <div class="card__head"><h2 class="h2">Trade and retail</h2></div>
@@ -124,19 +124,35 @@ function incompleteText(d) {
     ${products.length ? html`No cost entered for: ${products.slice(0, 6).join(', ')}${products.length > 6 ? ` and ${products.length - 6} more` : ''}. <a href="#/products">Add costs</a>.` : ''}`;
 }
 
-function waterfall(t) {
+/** A profit and loss statement for the orders in range. */
+function pnl(t, samples) {
   const row = (label, value, cls = '', sub = '') => html`<div class="wf__row ${cls}"><span>${label}${sub ? html` <span class="small muted">${sub}</span>` : ''}</span><span class="num">${value}</span></div>`;
+  const head = (label) => html`<div class="wf__head">${label}</div>`;
+  const pc = (n, of) => (of ? pctTxt(n / of) : '');
+  const revenue = t.net + t.shipping;
+  const gross = revenue - t.cogs;
+  const costs = t.postage + t.box + t.fees + t.other;
+  const afterSamples = t.profit - (samples ? samples.cost : 0);
   return html`<div class="wf">
-    ${row('Full retail value', money(t.gross))}
-    ${row('Discounts', neg(t.discounts), 'wf--minus', 'trade pricing and codes')}
-    ${row('Net sales', money(t.net), 'wf--total')}
-    ${row('Postage charged', money(t.shipping))}
-    ${row('Product cost', neg(t.cogs), 'wf--minus')}
-    ${row('Payment fees', neg(t.fees), 'wf--minus')}
-    ${row('Postage', neg(t.postage), 'wf--minus')}
+    ${head('Revenue')}
+    ${row('Sales at full price', money(t.gross))}
+    ${row('Discounts', neg(t.discounts), 'wf--minus', 'trade pricing, codes')}
+    ${row('Net sales', money(t.net), 'wf--sub')}
+    ${row('Postage charged to customers', money(t.shipping))}
+    ${row('Total revenue', money(revenue), 'wf--total')}
+    ${head('Cost of sales')}
+    ${row('Product cost', neg(t.cogs), 'wf--minus', 'landed cost per roll at the time of each order')}
+    ${row('Gross profit', money(gross), 'wf--total', pc(gross, revenue))}
+    ${head('Selling costs')}
+    ${row('Postage', neg(t.postage), 'wf--minus', t.postageEstimated ? `${t.postageEstimated} parcel${t.postageEstimated === 1 ? '' : 's'} at the large letter rate until parcel prices are set` : '')}
     ${row('Boxes and packaging', neg(t.box), 'wf--minus')}
-    ${t.other ? row('Other costs', neg(t.other), 'wf--minus') : ''}
-    ${row('Profit', money(t.profit), `wf--total ${t.profit < 0 ? 'margin--bad' : ''}`, pctTxt(t.margin))}
+    ${row('Payment fees', neg(t.fees), 'wf--minus')}
+    ${t.other ? row('Other order costs', neg(t.other), 'wf--minus') : ''}
+    ${row('Total selling costs', neg(costs), 'wf--sub')}
+    ${row('Net profit', money(t.profit), `wf--total ${t.profit < 0 ? 'margin--bad' : ''}`, pc(t.profit, revenue))}
+    ${samples && samples.orders ? html`
+      ${row('Free samples sent', neg(samples.cost), 'wf--minus', `${samples.orders} sample pack${samples.orders === 1 ? '' : 's'}: tape, postage and packaging`)}
+      ${row('Net profit after samples', money(afterSamples), `wf--total ${afterSamples < 0 ? 'margin--bad' : ''}`, pc(afterSamples, revenue))}` : ''}
   </div>`;
 }
 
@@ -152,12 +168,13 @@ function ordersTable(d) {
         <td class="num">${money(o.net)}</td><td class="num small muted">${o.discounts ? money(o.discounts) : '—'}</td>
         <td class="num">${o.complete ? money(o.cogs) : html`<span class="margin--bad small" title="${o.imported ? 'Imported invoice: no products listed' : `No cost for ${o.missing.join(', ')}`}">Unknown</span>`}</td>
         <td class="num">${money(o.fees)}${o.feesEstimated ? '*' : ''}</td>
-        <td class="num">${money(o.postage + o.box)}${o.overridden ? html` <span class="muted" title="Set on this order">${icon('pencil', 'i--sm')}</span>` : ''}</td>
+        <td class="num" title="${o.parcel || ''}${o.postageEstimated ? ': no price for this size yet, so the large letter rate is used' : ''}">${money(o.postage + o.box)}${o.postageEstimated ? '†' : ''}${o.overridden ? html` <span class="muted" title="Set on this order">${icon('pencil', 'i--sm')}</span>` : ''}</td>
         <td class="num strong ${o.complete && o.profit < 0 ? 'margin--bad' : ''}">${o.complete ? money(o.profit) : '—'}</td>
         <td class="num ${o.complete ? marginClass(o.margin) : 'muted'}">${o.complete ? pctTxt(o.margin) : '—'}</td></tr>`)
         : html`<tr><td colspan="11" class="muted">No orders in this range.</td></tr>`}</tbody>
     </table></div></section>
-    ${list.some((o) => o.feesEstimated) ? html`<p class="small muted">* PayPal fee estimated from the rate in settings.</p>` : ''}`;
+    ${list.some((o) => o.feesEstimated) ? html`<p class="small muted">* PayPal fee estimated from the rate in settings.</p>` : ''}
+    ${list.some((o) => o.postageEstimated) ? html`<p class="small muted">† A parcel size with no postage price yet: the large letter rate is used. Set parcel prices under Postage, boxes and fees.</p>` : ''}`;
 }
 
 function productsTable(d) {
@@ -193,7 +210,7 @@ export function orderDrawer(el, o) {
         ${row('Postage charged', money(o.shipping))}
         ${row('Product cost', o.complete ? neg(o.cogs) : 'Unknown', 'wf--minus')}
         ${row(`Payment fees${o.feesEstimated ? ' (estimated)' : ''}`, neg(o.fees), 'wf--minus')}
-        ${row('Postage', neg(o.postage), 'wf--minus')}
+        ${row(`Postage (${o.parcel || 'parcel'}, ${o.units} roll${o.units === 1 ? '' : 's'})${o.postageEstimated ? ' at the large letter rate' : ''}`, neg(o.postage), 'wf--minus')}
         ${row('Box and packaging', neg(o.box), 'wf--minus')}
         ${o.other ? row('Other', neg(o.other), 'wf--minus') : ''}
         ${row('Profit', o.complete ? money(o.profit) : '—', 'wf--total')}
@@ -206,7 +223,7 @@ export function orderDrawer(el, o) {
       <form class="form" data-costs>
         <p class="label" style="margin:0">This order's own costs <span class="small muted" style="text-transform:none;letter-spacing:0">(leave blank to use the default)</span></p>
         <div class="form-row">
-          <label class="field"><span>Postage (£)</span><input class="input" type="number" min="0" step="0.01" data-c="postage" value="${o.overridden && o.overridden.postage ? o.postage : ''}" placeholder="Default ${money(s.postage[o.type] || 0)}"></label>
+          <label class="field"><span>Postage (£)</span><input class="input" type="number" min="0" step="0.01" data-c="postage" value="${o.overridden && o.overridden.postage ? o.postage : ''}" placeholder="${o.parcel || 'Default'}: ${money(o.overridden && o.overridden.postage ? 0 : o.postage)}"></label>
           <label class="field"><span>Box (£)</span><input class="input" type="number" min="0" step="0.01" data-c="box" value="${o.overridden && o.overridden.box ? o.box : ''}" placeholder="Default ${money(s.box[o.type] || 0)}"></label>
           <label class="field"><span>Other (£)</span><input class="input" type="number" min="0" step="0.01" data-c="other" value="${o.overridden && o.overridden.other ? o.other : ''}" placeholder="£0.00"></label>
         </div>
@@ -224,16 +241,23 @@ export function orderDrawer(el, o) {
 }
 
 function settingsDrawer(el) {
-  const s = (ui.data && ui.data.settings) || { postage: {}, box: {}, paypal: {} };
+  const s = (ui.data && ui.data.settings) || { bands: [], box: {}, paypal: {} };
   const inp = (group, k, val, step = '0.01') => html`<input class="input" type="number" min="0" step="${step}" data-g="${group}" data-k="${k}" value="${val ?? 0}">`;
   openDrawer({
     title: 'Postage, boxes and fees', eyebrow: 'Margins',
     body: html`<form class="form">
-      <p class="small muted" style="margin:0">What it costs you per order, used on every order unless you set that order's own cost. Shopify Payments fees come straight from Shopify.</p>
+      <p class="label" style="margin:0">Postage by parcel size</p>
+      <p class="small muted" style="margin:0">Each order's postage comes from how many rolls are in it. A band with no price uses the one above it until you set it. Any order can still have its own postage.</p>
+      <div class="table-wrap"><table class="table" data-bands>
+        <thead><tr><th>Parcel</th><th>Up to (rolls)</th><th>Postage (£)</th></tr></thead>
+        <tbody>${(s.bands || []).map((b, i, all) => html`<tr>
+          <td><input class="input input--sm" data-b="name" value="${b.name}"></td>
+          <td>${i === all.length - 1 ? html`<span class="small muted">Anything bigger</span><input type="hidden" data-b="upTo" value="">` : html`<input class="input input--sm" type="number" min="1" step="1" data-b="upTo" value="${b.upTo ?? ''}">`}</td>
+          <td><input class="input input--sm" type="number" min="0" step="0.01" data-b="cost" value="${b.cost ?? ''}" placeholder="Not set"></td></tr>`)}</tbody></table></div>
+      <p class="label" style="margin:0">Per order</p>
       <div class="table-wrap"><table class="table">
         <thead><tr><th></th><th>Trade order</th><th>Retail order</th><th>Sample</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Postage (£)</th><td>${inp('postage', 'trade', s.postage.trade)}</td><td>${inp('postage', 'retail', s.postage.retail)}</td><td>${inp('postage', 'sample', s.postage.sample)}</td></tr>
           <tr><th scope="row">Box and packaging (£)</th><td>${inp('box', 'trade', s.box.trade)}</td><td>${inp('box', 'retail', s.box.retail)}</td><td>${inp('box', 'sample', s.box.sample)}</td></tr>
         </tbody></table></div>
       <div class="form-row">
@@ -245,8 +269,9 @@ function settingsDrawer(el) {
     foot: html`<button class="btn" data-save>${icon('check', 'i--sm')}Save</button><button class="btn btn--ghost" data-close>Cancel</button>`,
     onMount: ({ $, $$, close }) => {
       $('[data-save]').addEventListener('click', (e) => busy(e.currentTarget, async () => {
-        const body = { postage: {}, box: {}, paypal: {} };
+        const body = { box: {}, paypal: {} };
         $$('[data-g]').forEach((i) => { body[i.dataset.g][i.dataset.k] = i.value; });
+        body.bands = $$('[data-bands] tbody tr').map((tr) => Object.fromEntries([...tr.querySelectorAll('[data-b]')].map((x) => [x.dataset.b, x.value])));
         await serverApi('/api/margins/settings', { method: 'PUT', body });
         toast('Saved'); close(); ui.key = ''; render(el);
       }).catch(() => {}));

@@ -700,3 +700,9 @@ input[type="search"].input { border-radius: var(--radius-pill); padding-left: 16
 .nav__signout { border-top: 1px solid var(--hairline); }
 .nav__signout .btn, .nav__signout .btn:hover { color: var(--ink-muted); }
 .nav__signout .btn:hover { background: var(--surface-sunken); }
+
+/* P&L */
+.wf__head { font: 600 11px/1.3 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-muted); padding: 14px 0 4px; }
+.wf__head:first-child { padding-top: 0; }
+.wf--sub { font-weight: 600; }
+.wf--total { border-bottom: 1px solid var(--ink) !important; }
