@@ -4,10 +4,24 @@
 // straight away, within the server's daily limits.
 import { state, label } from '../store.js';
 import { prospectState, loadProspects } from '../prospects.js';
-import { html, icon, ago, toast, openDrawer, busy, loadingBlock, showEmail } from '../ui.js';
+import { html, icon, ago, fmtDate, toast, openDrawer, busy, loadingBlock, showEmail, emailExcerpt } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { richTextShell, mountRichText } from '../rich-text.js';
 import { TRADE_SERVER } from '../env.js';
+
+/** The email a draft answers: theirs open above the reply; our own earlier email (a follow-up) folded away. */
+function replyingTo(item) {
+  const m = item.replying_to;
+  if (!m) return '';
+  const theirs = m.direction === 'in';
+  const text = emailExcerpt(m.text, 4000) || '(no text)';
+  return html`<details class="reply-to ${theirs ? 'reply-to--in' : ''}" ${theirs ? html`open` : ''}>
+    <summary class="small"><span class="strong">${theirs ? `Their email${m.from ? ` from ${m.from}` : ''}` : 'Following up our earlier email'}</span>
+      <span class="muted"> · ${m.subject || '(no subject)'} · ${m.sentAt ? html`<span title="${fmtDate(m.sentAt)}">${ago(m.sentAt)}</span>` : ''}</span></summary>
+    <div class="reply-to__body small">${text}</div>
+  </details>
+  ${theirs ? html`<p class="eyebrow" style="margin:12px 0 6px">Our reply</p>` : ''}`;
+}
 
 const ui = { tab: 'pending_approval', items: null, status: null, loading: false, error: '', unmatched: [] };
 const TABS = [
@@ -98,6 +112,7 @@ export function render(el) {
             </div>
             ${item.agent_note ? html`<div class="notice notice--info" style="margin-bottom:12px">${icon('sparkles')}<div>${item.agent_note}</div></div>` : ''}
             ${item.error ? html`<div class="notice ${item.status === 'failed' ? 'notice--err' : 'notice--info'}" style="margin-bottom:12px">${icon('circle-alert')}<div>${item.error}</div></div>` : ''}
+            ${replyingTo(item)}
             <iframe class="email-frame" sandbox="" title="Email to ${item.customer_name || item.to_address}" data-frame="${item.id}"></iframe>
           </section>`)}</div>`}
     </div>`);
