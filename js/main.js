@@ -24,23 +24,35 @@ import * as followups from './views/followups.js';
 import * as setup from './views/setup.js';
 import * as importer from './views/import.js';
 
+// The menu: a few areas, each opening to its pages. The area you're in is
+// always open; the others stay as you left them.
 const NAV = [
   { key: 'dashboard', href: '#/', label: 'Dashboard', icon: 'layout-dashboard' },
-  { key: 'pipeline', href: '#/pipeline', label: 'Pipeline', icon: 'square-kanban' },
-  { key: 'prospects', href: '#/prospects', label: 'Prospects', icon: 'target' },
-  { key: 'customers', href: '#/customers', label: 'Customers', icon: 'users' },
-  { key: 'groups', href: '#/groups', label: 'Groups', icon: 'building-2' },
-  { key: 'outbox', href: '#/outbox', label: 'Outbox', icon: 'inbox' },
-  { key: 'templates', href: '#/templates', label: 'Email templates', icon: 'mail' },
-  { key: 'agent', href: '#/agent', label: 'Agent', icon: 'sparkles' },
-  { key: 'knowledge', href: '#/knowledge', label: 'Knowledge base', icon: 'book-open' },
-  { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
-  { key: 'products', href: '#/products', label: 'Products', icon: 'package' },
-  { key: 'margins', href: '#/margins', label: 'Margins', icon: 'percent' },
-  { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
-  { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
-  { key: 'setup', href: '#/setup', label: 'Setup', icon: 'settings' },
+  { group: 'crm', label: 'CRM', icon: 'users', items: [
+    { key: 'pipeline', href: '#/pipeline', label: 'Pipeline', icon: 'square-kanban' },
+    { key: 'customers', href: '#/customers', label: 'Customers', icon: 'store' },
+    { key: 'prospects', href: '#/prospects', label: 'Prospects', icon: 'target' },
+    { key: 'groups', href: '#/groups', label: 'Groups', icon: 'building-2' },
+    { key: 'follow-ups', href: '#/follow-ups', label: 'Follow-ups', icon: 'list-checks' },
+  ] },
+  { group: 'email', label: 'Email', icon: 'mail', items: [
+    { key: 'outbox', href: '#/outbox', label: 'Outbox', icon: 'inbox' },
+    { key: 'templates', href: '#/templates', label: 'Templates', icon: 'file-text' },
+    { key: 'agent', href: '#/agent', label: 'Agent', icon: 'sparkles' },
+    { key: 'knowledge', href: '#/knowledge', label: 'Knowledge base', icon: 'book-open' },
+  ] },
+  { group: 'products', label: 'Products', icon: 'package', items: [
+    { key: 'products', href: '#/products', label: 'Products and stock', icon: 'boxes' },
+    { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
+  ] },
+  { group: 'reporting', label: 'Reporting', icon: 'chart-column', items: [
+    { key: 'orders', href: '#/orders', label: 'Trade orders', icon: 'receipt' },
+    { key: 'margins', href: '#/margins', label: 'Margins', icon: 'percent' },
+  ] },
+  { key: 'setup', href: '#/setup', label: 'Settings', icon: 'settings' },
 ];
+const NAV_OPEN_KEY = 'tuNavOpen';
+const navOpen = (() => { try { return new Set(JSON.parse(localStorage.getItem(NAV_OPEN_KEY) || '[]')); } catch (err) { return new Set(); } })();
 
 const ROUTES = [
   { nav: 'dashboard', re: /^\/?$/, view: dashboard },
@@ -76,9 +88,29 @@ let loadingText = EMBEDDED ? 'Connecting to Shopify…' : 'Connecting to Shopify
 function renderNav() {
   const today = todayISO();
   const due = state.customersLoaded ? followUps().filter((f) => f.entry.followUp <= today).length : 0;
-  nav.innerHTML = String(html`${NAV.map((n) => html`
-    <a href="${n.href}" ${current && current.nav === n.key ? html`aria-current="page"` : ''}>${icon(n.icon)}<span>${n.label}</span>${n.key === 'follow-ups' && due ? html`<span class="nav__count" title="${due} due or overdue">${due}</span>` : ''}${n.key === 'outbox' && outbox.outboxCount() ? html`<span class="nav__count" title="Waiting for your approval">${outbox.outboxCount()}</span>` : ''}</a>`)}
+  const waiting = outbox.outboxCount();
+  const counts = { 'follow-ups': due ? html`<span class="nav__count" title="${due} due or overdue">${due}</span>` : '', outbox: waiting ? html`<span class="nav__count" title="Waiting for your approval">${waiting}</span>` : '' };
+  const link = (n) => html`<a href="${n.href}" ${current && current.nav === n.key ? html`aria-current="page"` : ''}>${icon(n.icon)}<span>${n.label}</span>${counts[n.key] || ''}</a>`;
+  nav.innerHTML = String(html`${NAV.map((n) => {
+    if (!n.group) return link(n);
+    const here = !!current && n.items.some((x) => x.key === current.nav);
+    const open = here || navOpen.has(n.group);
+    // Collapsed, the area still shows anything waiting inside it.
+    const inside = open ? '' : n.items.map((x) => counts[x.key] || '');
+    return html`<div class="nav__group ${here ? 'is-current' : ''}">
+      <button type="button" class="nav__head" data-group="${n.group}" aria-expanded="${String(open)}" aria-controls="nav-${n.group}">${icon(n.icon)}<span>${n.label}</span>${inside}${icon('chevron-right', 'nav__chev')}</button>
+      <div class="nav__items" id="nav-${n.group}" ${open ? '' : html`hidden`}>${n.items.map(link)}</div>
+    </div>`;
+  })}
     ${EMBEDDED ? '' : html`<form method="post" action="/auth/logout" class="nav__signout"><button class="btn btn--ghost btn--sm" type="submit">${icon('log-out', 'i--sm')}Sign out</button></form>`}`);
+  nav.querySelectorAll('[data-group]').forEach((b) => b.addEventListener('click', () => {
+    const g = b.dataset.group;
+    const isOpen = b.getAttribute('aria-expanded') === 'true';
+    if (isOpen) navOpen.delete(g); else navOpen.add(g);
+    try { localStorage.setItem(NAV_OPEN_KEY, JSON.stringify([...navOpen])); } catch (err) { /* private window */ }
+    b.setAttribute('aria-expanded', String(!isOpen));
+    document.getElementById(`nav-${g}`).hidden = isOpen;
+  }));
 }
 
 function renderSync() {
