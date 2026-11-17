@@ -46,6 +46,7 @@ export function render(el) {
   if (ui.key !== key && ui.loading !== key && ui.errKey !== key) load(el);
   const d = ui.key === key ? ui.data : null;
   const t = d && d.summary;
+  const c = t && t.costed; // orders whose costs are all known
 
   el.innerHTML = String(html`
     <div class="page page--wide">
@@ -69,21 +70,21 @@ export function render(el) {
         ${t.incomplete ? html`<div class="notice notice--info" style="margin-bottom:16px">${icon('info')}<div>${incompleteText(d)}</div></div>` : ''}
         <div class="stats" style="margin-bottom:20px">
           <div class="stat"><span class="stat__label">Net sales</span><span class="stat__value">${money(t.net)}</span><span class="stat__sub">${count(t.orders)} orders · avg ${money(t.aov)}</span></div>
-          <div class="stat"><span class="stat__label">Gross profit</span><span class="stat__value">${money(t.net - t.cogs)}</span><span class="stat__sub"><span class="${marginClass(t.grossMargin)} strong">${pctTxt(t.grossMargin)}</span> after product cost</span></div>
-          <div class="stat"><span class="stat__label">Profit</span><span class="stat__value ${t.profit < 0 ? 'margin--bad' : ''}">${money(t.profit)}</span><span class="stat__sub"><span class="${marginClass(t.margin)} strong">${pctTxt(t.margin)}</span> after fees, postage and boxes</span></div>
+          <div class="stat"><span class="stat__label">Gross profit</span><span class="stat__value">${c.orders ? money(c.net - c.cogs) : '—'}</span><span class="stat__sub"><span class="${marginClass(c.grossMargin)} strong">${pctTxt(c.grossMargin)}</span> after product cost${t.incomplete ? ` · ${c.orders} of ${t.orders} orders` : ''}</span></div>
+          <div class="stat"><span class="stat__label">Profit</span><span class="stat__value ${c.profit < 0 ? 'margin--bad' : ''}">${c.orders ? money(c.profit) : '—'}</span><span class="stat__sub"><span class="${marginClass(c.margin)} strong">${pctTxt(c.margin)}</span> after fees, postage and boxes${t.incomplete ? ` · ${c.orders} of ${t.orders} orders` : ''}</span></div>
           <div class="stat"><span class="stat__label">Discounts given</span><span class="stat__value">${money(t.discounts)}</span><span class="stat__sub">${t.gross ? pctTxt(t.discounts / t.gross) : '—'} off full retail price</span></div>
           <div class="stat"><span class="stat__label">Samples sent</span><span class="stat__value">${money(d.samples.cost)}</span><span class="stat__sub">${count(d.samples.orders)} sample orders · ${count(d.samples.units)} rolls${d.samples.complete ? '' : ' · some costs missing'}</span></div>
         </div>
         <div class="grid grid--side" style="margin-bottom:20px">
           <section class="card">
-            <div class="card__head"><h2 class="h2">Where the money goes</h2><span class="small muted">${fmtDate(d.from)} to ${fmtDate(d.to)}</span></div>
-            ${waterfall(t)}
+            <div class="card__head"><h2 class="h2">Where the money goes</h2><span class="small muted">${fmtDate(d.from)} to ${fmtDate(d.to)}${t.incomplete ? ` · the ${c.orders} orders with costs` : ''}</span></div>
+            ${c.orders ? waterfall(c) : html`<p class="muted small">Add product costs on <a href="#/products">Products</a> and the breakdown fills in.</p>`}
           </section>
           <section class="card">
             <div class="card__head"><h2 class="h2">Trade and retail</h2></div>
             ${['trade', 'retail'].map((k) => { const s = d.byType[k]; return html`<div class="split">
               <div class="row" style="justify-content:space-between"><span class="strong">${TYPE_LABEL[k]}</span><span class="small muted">${count(s.orders)} orders</span></div>
-              <div class="row small" style="justify-content:space-between"><span>Net sales ${money(s.net)}</span><span>Profit ${money(s.profit)} · <span class="${marginClass(s.margin)} strong">${pctTxt(s.margin)}</span></span></div>
+              <div class="row small" style="justify-content:space-between"><span>Net sales ${money(s.net)}</span><span>${s.costed.orders ? html`Profit ${money(s.costed.profit)} · <span class="${marginClass(s.costed.margin)} strong">${pctTxt(s.costed.margin)}</span>` : html`<span class="muted">Profit needs costs</span>`}</span></div>
             </div>`; })}
             ${ui.type !== 'all' ? html`<p class="small muted">Showing ${TYPE_LABEL[ui.type].toLowerCase()} only in the totals and tables.</p>` : ''}
           </section>
@@ -118,7 +119,7 @@ function incompleteText(d) {
   const left = d.orders.filter((o) => o.type !== 'sample' && !o.complete);
   const imported = left.filter((o) => o.imported).length;
   const products = [...new Set(left.flatMap((o) => o.missing))];
-  return html`${left.length} order${left.length === 1 ? ' is' : 's are'} left out of the totals because a cost isn't known.
+  return html`${left.length} order${left.length === 1 ? ' is' : 's are'} left out of the profit figures because a cost isn't known (sales and discounts still count them).
     ${imported ? html`${imported} ${imported === 1 ? 'is an imported invoice' : 'are imported invoices'} with no products listed. ` : ''}
     ${products.length ? html`No cost entered for: ${products.slice(0, 6).join(', ')}${products.length > 6 ? ` and ${products.length - 6} more` : ''}. <a href="#/products">Add costs</a>.` : ''}`;
 }

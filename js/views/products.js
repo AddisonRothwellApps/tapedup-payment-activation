@@ -82,7 +82,7 @@ function productsTab() {
     <section class="card" style="padding:0">
       <div class="table-wrap"><table class="table products-table">
         <thead><tr><th>Size / variant</th><th>SKU</th><th class="num">Stock</th><th class="num">Cost</th><th class="num">Trade</th><th class="num">Retail</th>
-          <th class="num" title="Profit per unit at our trade price">Trade profit</th><th class="num" title="Our margin selling at trade price">Trade margin</th><th class="num" title="Our margin selling at retail on our website">Retail margin</th><th class="num" title="What a dealer makes buying at trade and selling at retail">Dealer margin</th><th>Supplier</th><th><span class="visually-hidden">Edit</span></th></tr></thead>
+          <th class="num" title="Profit per unit at our trade price">Trade profit</th><th class="num" title="Our margin selling at trade price">Trade margin</th><th class="num" title="Our margin selling at retail on our website">Retail margin</th><th class="num" title="What a dealer makes buying at trade and selling at retail, on the shelf price before VAT">Dealer margin</th><th>Supplier</th><th><span class="visually-hidden">Edit</span></th></tr></thead>
         <tbody>${list.length ? list.map((p) => html`
           <tr class="products-table__product"><td colspan="12"><div class="row" style="gap:10px">
             ${p.image ? html`<img src="${p.image}" alt="" width="32" height="32" class="products-table__img" loading="lazy">` : html`<span class="products-table__img">${icon('package', 'i--sm')}</span>`}
@@ -143,7 +143,7 @@ function editVariant(el, id) {
         const cost = val('cost') === '' ? null : Number(val('cost'));
         const trade = val('trade') === '' ? null : Number(val('trade'));
         const m = (price) => (cost == null || !price ? '—' : `${money(price - cost)} a unit · ${pctTxt((price - cost) / price)}`);
-        $('[data-preview]').innerHTML = String(html`<div class="small"><div><span class="muted">At trade:</span> ${m(trade)}</div><div><span class="muted">At retail:</span> ${m(v.retail)}</div>${trade ? html`<div><span class="muted">Dealer makes:</span> ${money(v.retail - trade)} a unit · ${pctTxt((v.retail - trade) / v.retail)}</div>` : ''}</div>`);
+        $('[data-preview]').innerHTML = String(html`<div class="small"><div><span class="muted">At trade:</span> ${m(trade)}</div><div><span class="muted">At retail:</span> ${m(v.retail)}</div>${trade ? html`<div><span class="muted">Dealer makes:</span> ${money(v.retail / 1.2 - trade)} a unit before VAT · ${pctTxt((v.retail / 1.2 - trade) / (v.retail / 1.2))}</div>` : ''}</div>`);
       };
       $$('[data-f="cost"], [data-f="trade"]').forEach((i) => i.addEventListener('input', preview));
       preview();
