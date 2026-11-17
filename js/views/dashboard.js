@@ -4,8 +4,73 @@
 import { state, dashboard, insights, label, sublabel, shortTape, followUps, STATUS, todayISO, hasAllOrders } from '../store.js';
 import { html, raw, icon, money0, count, delta, columnChart, barList, statusChip, ago, dueLabel, loadingBlock, trendBadge } from '../ui.js';
 import { openGiveOffer } from './offers.js';
+import { toast, busy } from '../ui.js';
+import { SERVER_FEATURES, serverApi } from '../server.js';
+import { emailState, loadEmailTemplates } from '../email-templates.js';
 
 const ui = { days: 90 };
+// Profit for the period (and the one before, for the change), from the trade server's margin report.
+const profit = { key: '', loading: '', cur: null, prev: null, error: '' };
+// For "Needs a nudge": the templates, and who already has an email waiting.
+const nudge = { steps: null, loading: false, choice: new Map() };
+const iso = (t) => new Date(t).toLocaleDateString('en-CA');
+const DAY = 864e5;
+
+function loadProfit(el, days) {
+  if (!SERVER_FEATURES) return;
+  const key = String(days);
+  if (profit.key === key || profit.loading === key) return;
+  profit.loading = key;
+  const now = Date.now();
+  const range = (endAgo) => `from=${iso(now - (endAgo + days - 1) * DAY)}&to=${iso(now - endAgo * DAY)}`;
+  Promise.all([serverApi(`/api/margins?${range(0)}&type=all`), serverApi(`/api/margins?${range(days)}&type=all`)])
+    .then(([cur, prev]) => { if (profit.loading !== key) return; Object.assign(profit, { key, cur, prev, error: '' }); })
+    .catch((err) => { if (profit.loading === key) Object.assign(profit, { key, error: err.message }); })
+    .finally(() => { if (profit.loading === key) { profit.loading = ''; if (el.isConnected) render(el); } });
+}
+
+function loadNudge(el) {
+  if (!SERVER_FEATURES || nudge.loading || nudge.steps) return;
+  nudge.loading = true;
+  Promise.all([serverApi('/api/next-steps'), emailState.loaded ? null : loadEmailTemplates()])
+    .then(([steps]) => { nudge.steps = steps; })
+    .catch(() => { nudge.steps = { customers: {}, prospects: {} }; })
+    .finally(() => { nudge.loading = false; if (el.isConnected) render(el); });
+}
+const activeTemplates = () => ((emailState.set && emailState.set.templates) || []).filter((t) => t.active !== false);
+
+/** Profit card: trade profit for the period, with all sales underneath. */
+function profitStat() {
+  if (!SERVER_FEATURES) return '';
+  const c = profit.cur && profit.cur.byType.trade.costed;
+  const p = profit.prev && profit.prev.byType.trade.costed;
+  const all = profit.cur && profit.cur.summary.costed;
+  const missing = profit.cur ? profit.cur.byType.trade.incomplete : 0;
+  return html`<div class="stat"><span class="stat__label">Profit</span>
+    <span class="stat__value">${c ? money0(c.profit) : profit.error ? '—' : '…'}</span>
+    <span class="stat__sub">${c ? html`${c.margin != null ? html`<span class="strong">${Math.round(c.margin * 100)}%</span> margin · ` : ''}${delta(c.profit, p ? p.profit : 0, { money: true })}` : profit.error ? html`<a href="#/margins">Couldn't load</a>` : 'Working it out…'}</span>
+    ${c ? html`<span class="stat__sub"><a href="#/margins">All sales ${money0(all.profit)}</a>${missing ? html` · <span title="Imported invoices or products with no cost">${missing} without costs</span>` : ''}</span>` : ''}
+  </div>`;
+}
+
+/** The email picker and Draft button for one customer in "Needs a nudge". */
+function nudgeAction(c, s) {
+  if (!SERVER_FEATURES) return '';
+  if (!nudge.steps) return html`<span class="muted small">…</span>`;
+  const info = nudge.steps.customers[c.id] || {};
+  if (info.waiting) return html`<a class="badge badge--cyan" href="#/outbox">${icon('inbox', 'i--sm')}In outbox</a>`;
+  if (!c.email) return html`<span class="muted small">No email</span>`;
+  const tpl = activeTemplates();
+  const has = (k) => tpl.some((t) => t.key === k);
+  const sug = s.status === 'risk' && info.lastKey === 'reorder' && has('winback') ? 'winback' : has('reorder') ? 'reorder' : (tpl[0] || {}).key || '';
+  const pick = nudge.choice.has(c.id) ? nudge.choice.get(c.id) : sug;
+  return html`<div class="deal__send nudge__send">
+    <select class="select input--sm" data-nudge="${c.id}" aria-label="Email for ${label(c)}">
+      ${tpl.map((t) => html`<option value="${t.key}" ${t.key === pick ? raw('selected') : ''}>${t.name || t.key}${t.key === sug ? ' (suggested)' : ''}</option>`)}
+    </select>
+    <button type="button" class="btn btn--sm btn--ink" data-nudge-draft="${c.id}" ${pick ? '' : raw('disabled')} title="Draft this email into the Outbox for approval">${icon('mail', 'i--sm')}Draft</button>
+  </div>`;
+}
 const PERIODS = [[30, '30 days'], [90, '90 days'], [365, '12 months']];
 
 export function render(el) {
@@ -19,6 +84,8 @@ export function render(el) {
   const d = dashboard(ui);
   const attention = [...state.customers.values()].map((c) => ({ c, s: insights(c) }))
     .filter(({ s }) => ['due', 'risk'].includes(s.status)).sort((a, b) => b.c.amountSpent - a.c.amountSpent).slice(0, 6);
+  loadProfit(el, ui.days);
+  loadNudge(el);
   const granularity = ui.days > 120 ? 'By month' : ui.days > 31 ? 'By week' : 'By day';
 
   el.innerHTML = String(html`
@@ -52,6 +119,7 @@ export function render(el) {
       ${firstSync ? loadingBlock('Syncing your orders for the first time…', 'This only takes a while once. After that, opening the app just fetches what changed.') : html`
       <div class="stats ${state.ordersSyncing ? 'is-stale' : ''}">
         <div class="stat"><span class="stat__label">Revenue</span><span class="stat__value">${money0(d.revenue.cur)}</span><span class="stat__sub">${delta(d.revenue.cur, d.revenue.prev, { money: true })}</span></div>
+        ${profitStat()}
         <div class="stat"><span class="stat__label">Orders</span><span class="stat__value">${count(d.orders.cur)}</span><span class="stat__sub">${delta(d.orders.cur, d.orders.prev)}</span></div>
         <div class="stat"><span class="stat__label">Customers ordering</span><span class="stat__value">${count(d.customers.cur)}</span><span class="stat__sub">${delta(d.customers.cur, d.customers.prev)}</span></div>
         <div class="stat"><span class="stat__label">Average order</span><span class="stat__value">${money0(d.aov.cur)}</span><span class="stat__sub">${delta(d.aov.cur, d.aov.prev, { money: true })}</span></div>
@@ -97,13 +165,14 @@ export function render(el) {
       <section class="card card--flush">
         <div class="card__head"><h2 class="h2">Needs a nudge</h2><span class="muted small">Right now · past their usual reorder time, biggest spenders first</span></div>
         ${attention.length ? html`<div class="table-wrap" style="margin-top:6px"><table class="table">
-          <thead><tr><th>Customer</th><th>Status</th><th class="hide-sm">Usually orders</th><th>Last order</th><th class="r">Lifetime</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Status</th><th class="hide-sm">Usually orders</th><th>Last order</th><th class="r">Lifetime</th>${SERVER_FEATURES ? html`<th>Email</th>` : ''}</tr></thead>
           <tbody>${attention.map(({ c, s }) => html`<tr data-href="#/customers/${c.numericId}">
             <td><div class="cust"><span class="cust__name clip">${label(c)}</span><span class="cust__sub clip">${sublabel(c) || c.email}</span></div></td>
             <td>${statusChip(s.status, STATUS)}</td>
             <td class="hide-sm">${s.gap ? `Every ${Math.round(s.gap)} days` : '—'}</td>
             <td class="nowrap">${ago(s.lastAt)}</td>
             <td class="r">${money0(c.amountSpent)}</td>
+            ${SERVER_FEATURES ? html`<td class="nudge__cell">${nudgeAction(c, s)}</td>` : ''}
           </tr>`)}</tbody></table></div>`
           : html`<div class="empty">${icon('check')}<span>Everyone's ordering on their usual rhythm.</span></div>`}
       </section>
@@ -111,7 +180,20 @@ export function render(el) {
 
   el.querySelector('[data-give]').addEventListener('click', () => openGiveOffer());
   el.querySelectorAll('[data-days]').forEach((b) => b.addEventListener('click', () => { ui.days = Number(b.dataset.days); render(el); }));
-  el.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => { location.hash = tr.dataset.href; }));
+  el.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (e.target.closest('.nudge__cell')) return; location.hash = tr.dataset.href; }));
+  el.querySelectorAll('[data-nudge]').forEach((sel) => sel.addEventListener('change', () => { nudge.choice.set(sel.dataset.nudge, sel.value); }));
+  el.querySelectorAll('[data-nudge-draft]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.nudgeDraft;
+    const c = state.customers.get(id);
+    const key = el.querySelector(`[data-nudge="${CSS.escape(id)}"]`).value;
+    const t = activeTemplates().find((x) => x.key === key);
+    busy(b, () => serverApi('/api/outbox/bulk', { method: 'POST', body: { items: [{ customerId: id, templateKey: key }] } })).then((r) => {
+      if (r.failed && r.failed.length) { toast(`${label(c)}: ${r.failed[0].reason}`, 'err'); return; }
+      toast(`Drafted "${(t && t.name) || key}" for ${label(c)}: it's in the Outbox`);
+      window.dispatchEvent(new Event('outbox-changed'));
+      nudge.steps = null; nudge.choice.delete(id); render(el);
+    }).catch(() => {});
+  }));
   const chart = el.querySelector('[data-chart]');
   if (chart) columnChart(chart, d.series, { unit: 'Revenue' });
 }
