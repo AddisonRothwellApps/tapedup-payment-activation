@@ -35,6 +35,8 @@ const DEALER_COLS = [
   { key: 'Needs resurrecting', health: 'lapsed', hint: 'Over 8 months: win them back', tone: 'lapsed' },
 ];
 const DEALER_KEYS = new Set(DEALER_COLS.map((d) => d.key));
+// Stages before someone's first order: a real order moves them on to the dealer columns.
+const PRE_DEALER = new Set(['Prospect', 'Contacted', 'Replied', 'Sample sent', 'Account opened']);
 const COLUMN_OF_HEALTH = Object.fromEntries(DEALER_COLS.map((d) => [d.health, d.key]));
 // The board: the sales stages, with Active dealer and Lapsed swapped for the dealer columns.
 const BOARD = PIPELINE.flatMap((p) => (p.key === 'Active dealer' ? DEALER_COLS.map((d) => ({ ...d, dealer: true })) : p.key === 'Lapsed' ? [] : [p]));
@@ -49,9 +51,8 @@ const NEW_FOR = 90;          // a first order in the last 3 months: a new dealer
 
 /** Which dealer column an active dealer sits in, from their orders. */
 function healthOf(c, saved, now) {
-  const { daysSince, orders } = insights(c, now);
-  if (daysSince == null) return saved === 'Lapsed' ? 'lapsed' : 'new'; // marked a dealer, but no orders here yet
-  const count = Math.max(c.numberOfOrders || 0, orders.length);
+  const { daysSince, count } = insights(c, now);
+  if (!count || daysSince == null) return null; // marked a dealer, but no real orders: not a dealer yet
   if (count <= 1 && daysSince <= NEW_FOR) return 'new';
   if (daysSince <= THRIVING_UNTIL) return 'active';
   if (daysSince <= DUE_UNTIL) return 'due';
@@ -186,9 +187,14 @@ function cards(now) {
   for (const c of state.customers.values()) {
     if (q && ![label(c), c.name, c.email, c.city].some((v) => String(v || '').toLowerCase().includes(q))) continue;
     const st = stageOf(c, now);
-    const health = DEALER_STAGES.has(st.stage) ? healthOf(c, st.stage, now) : null;
+    // Whoever has placed a real order (not a sample) is a dealer, whatever stage they were left at;
+    // anyone marked a dealer with no orders at all is placed back at Account opened.
+    const ordered = insights(c, now).count > 0;
+    const dealer = ordered && (DEALER_STAGES.has(st.stage) || PRE_DEALER.has(st.stage));
+    const health = dealer ? healthOf(c, st.stage, now) : null;
     const col = health ? COLUMN_OF_HEALTH[health] : null;
-    out.get(col || st.stage).push({ c, st, health, col, next: nextFollowUp(c), days: col ? null : daysInStage(c, now), contact: lastContact(c), since: col ? insights(c, now).daysSince : null });
+    const place = col || (DEALER_STAGES.has(st.stage) ? 'Account opened' : st.stage);
+    out.get(place).push({ c, st, health, col, next: nextFollowUp(c), days: col ? null : daysInStage(c, now), contact: lastContact(c), since: col ? insights(c, now).daysSince : null });
   }
   for (const p of prospectState.items) {
     if (q && ![p.company, p.contact, p.email, p.city].some((v) => String(v || '').toLowerCase().includes(q))) continue;

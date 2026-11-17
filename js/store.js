@@ -526,11 +526,13 @@ const compactOrder = (o) => ({
   x: o.cancelledAt ? 1 : 0,
   test: o.test ? 1 : 0,
   imp: (o.tags || []).includes(IMPORT_TAG) ? 1 : 0,
+  // A free sample pack (tagged trade-sample): not a sale, so it never counts as an order.
+  smp: (o.tags || []).includes('trade-sample') ? 1 : 0,
   // [product title, variant title, quantity, line total after line discounts]
   lines: o.lineItems.nodes.map((l) => [l.title, l.variantTitle || '', l.quantity, Number(l.discountedTotalSet.shopMoney.amount) || 0]),
 });
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3; // 3: sample orders flagged
 const cacheKey = () => `tuAdminOrders:v${CACHE_VERSION}:${state.shop.myshopifyDomain}`;
 function readCache() {
   try { return JSON.parse(localStorage.getItem(cacheKey()) || 'null'); } catch (err) { return null; }
@@ -635,7 +637,7 @@ export async function syncOrders({ full = false } = {}) {
 // ---------------------------------------------------------------------------
 // Insights
 // ---------------------------------------------------------------------------
-export const countable = (o) => !o.x && !o.test;
+export const countable = (o) => !o.x && !o.test && !o.smp;
 const sum = (list, fn) => list.reduce((s, x) => s + fn(x), 0);
 const median = (list) => { const s = [...list].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
@@ -678,18 +680,22 @@ export function topProducts(orders, limit = 6) {
 }
 
 export function insights(c, now = Date.now()) {
-  const orders = (state.ordersByCustomer.get(c.numericId) || []).filter(countable);
+  const all = state.ordersByCustomer.get(c.numericId) || [];
+  const orders = all.filter(countable);
+  // Shopify's order count includes free sample packs; take those back off.
+  const samples = all.filter((o) => o.smp && !o.x && !o.test).length;
+  const count = Math.max(orders.length, (c.numberOfOrders || 0) - samples);
   // Synced orders first: Shopify's lastOrder is the last one *created*,
-  // which after an import can be an old back-dated order.
-  const lastAt = (orders[0] && orders[0].at) || c.lastOrderAt || null;
+  // which after an import can be an old back-dated order (or a sample pack).
+  const lastAt = (orders[0] && orders[0].at) || (count && !samples ? c.lastOrderAt : null) || null;
   const daysSince = lastAt ? Math.floor((now - Date.parse(lastAt)) / DAY) : null;
   const times = orders.map((o) => Date.parse(o.at)).sort((a, b) => a - b);
   const gaps = times.slice(1).map((t, i) => (t - times[i]) / DAY);
   const gap = gaps.length ? median(gaps) : null;
 
   let status;
-  if (!c.numberOfOrders && !orders.length) status = 'lead';
-  else if (c.numberOfOrders <= 1 && daysSince !== null && daysSince <= 60) status = 'new';
+  if (!count) status = 'lead';
+  else if (count <= 1 && daysSince !== null && daysSince <= 60) status = 'new';
   else {
     const typical = Math.max(gap || 60, 21);
     if (daysSince === null) status = 'lapsed';
@@ -702,6 +708,7 @@ export function insights(c, now = Date.now()) {
   const products = topProducts(orders, 5);
   return {
     orders,
+    count,
     lastAt,
     daysSince,
     gap,
