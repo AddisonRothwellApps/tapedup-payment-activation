@@ -710,3 +710,6 @@ input[type="search"].input { border-radius: var(--radius-pill); padding-left: 16
 /* Dashboard: Needs a nudge actions */
 .nudge__cell { min-width: 300px; }
 .nudge__send .select { max-width: 230px; min-width: 200px; }
+
+.wf--note { font-size: var(--text-xs, 12px); color: var(--ink-muted); }
+.order-margin { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; padding: 10px 14px; border-radius: 14px; background: var(--surface-100); font-size: 13px; }

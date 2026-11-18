@@ -101,7 +101,11 @@ export function render(el, numericId) {
                 </tr>
                 ${expanded.has(o.id) ? html`<tr><td colspan="6" style="background:var(--surface-subtle)">
                   <div class="list">${o.lines.map(([title, variant, qty, amount]) => html`<div class="list__item"><span class="list__main">${title}${variant ? html` <span class="muted">· ${variant}</span>` : ''}</span><span class="num">${qty} ×</span><span class="num" style="width:90px;text-align:right">${money(amount)}</span></div>`)}</div>
-                  <a class="btn btn--ghost btn--sm" style="margin-top:8px" href="${adminUrl(`orders/${o.id}`)}" target="_top">${icon('external-link', 'i--sm')}Open in Shopify</a>
+                  ${SERVER_FEATURES && !o.x ? orderMarginLine(o.id) : ''}
+                  <div class="row" style="gap:8px;margin-top:8px">
+                    ${SERVER_FEATURES && !o.x ? html`<button class="btn btn--outline btn--sm" data-margin="${o.id}">${icon('percent', 'i--sm')}Full margin report</button>` : ''}
+                    <a class="btn btn--ghost btn--sm" href="${adminUrl(`orders/${o.id}`)}" target="_top">${icon('external-link', 'i--sm')}Open in Shopify</a>
+                  </div>
                 </td></tr>` : ''}`)}</tbody></table></div>
               ${allOrders.length > FIRST ? html`<div style="padding:10px 16px 14px"><button class="btn btn--ghost btn--sm" data-more="orders">${more.orders ? 'Show the latest 5' : `View all ${allOrders.length} orders`}</button></div>` : ''}`
               : html`<div class="empty">${icon('receipt')}<span>No orders in the synced history.</span></div>`}
@@ -169,8 +173,19 @@ export function render(el, numericId) {
   if (rm) rm.addEventListener('click', () => openRemove(c));
   el.querySelectorAll('[data-log]').forEach((b) => b.addEventListener('click', () => openLogDrawer(c)));
 
+  el.querySelectorAll('[data-margin]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    busy(b, () => orderMargin(b.dataset.margin, true))
+      .then(async (item) => { const m = await import('./margins.js'); m.orderDrawer(el, item, { onSaved: () => { marginCache.delete(b.dataset.margin); render(el, numericId); } }); })
+      .catch(() => {});
+  }));
   el.querySelectorAll('[data-order]').forEach((tr) => tr.addEventListener('click', () => {
-    if (expanded.has(tr.dataset.order)) expanded.delete(tr.dataset.order); else expanded.add(tr.dataset.order);
+    if (expanded.has(tr.dataset.order)) expanded.delete(tr.dataset.order);
+    else {
+      expanded.add(tr.dataset.order);
+      // Fetch its margin in the background and show it in the open row.
+      if (SERVER_FEATURES && !marginCache.has(tr.dataset.order)) orderMargin(tr.dataset.order).then(() => { if (el.isConnected) render(el, numericId); }).catch(() => {});
+    }
     render(el, numericId);
   }));
 
@@ -281,4 +296,27 @@ export function openLogDrawer(c, type = 'call') {
       });
     },
   });
+}
+
+// Each order's margin report from the trade server, kept while the page is open.
+const marginCache = new Map();
+function orderMargin(numId, fresh = false) {
+  if (!fresh && marginCache.has(numId)) return Promise.resolve(marginCache.get(numId));
+  return serverApi(`/api/margins/order?id=${encodeURIComponent(`gid://shopify/Order/${numId}`)}`).then((r) => { marginCache.set(numId, r.item); return r.item; })
+    .catch((err) => { marginCache.set(numId, { error: err.message }); throw err; });
+}
+/** One line on an open order: profit, margin, and postage charged against paid. */
+function orderMarginLine(numId) {
+  const m = marginCache.get(numId);
+  if (!m) return html`<p class="small muted" style="margin:8px 0 0">Working out the margin…</p>`;
+  if (m.error) return html`<p class="small muted" style="margin:8px 0 0">Couldn't work out the margin: ${m.error}</p>`;
+  const pct = (x) => (x == null ? '—' : `${(x * 100).toFixed(1)}%`);
+  const src = m.postageSource === 'label' ? 'Shopify label' : m.postageSource === 'set' ? 'set by hand' : 'estimate';
+  return html`<div class="order-margin">
+    <span><span class="muted">Profit</span> <strong class="${m.complete && m.profit < 0 ? 'margin--bad' : ''}">${m.complete ? money(m.profit) : '—'}</strong></span>
+    <span><span class="muted">Margin</span> <strong>${m.complete ? pct(m.margin) : '—'}</strong></span>
+    <span><span class="muted">Product cost</span> ${m.complete ? money(m.cogs) : html`<span class="margin--bad">${m.imported ? 'imported invoice' : 'cost missing'}</span>`}</span>
+    <span><span class="muted">Postage</span> in ${money(m.shipping)} · out ${money(m.postage)} <span class="muted">(${src})</span></span>
+    <span><span class="muted">Fees</span> ${money(m.fees)}</span>
+  </div>`;
 }
