@@ -1,7 +1,7 @@
 // Dashboard: how the business is doing over a period, who's buying the most,
 // who's ordering more or less, which tapes sell, and who needs a nudge.
 // Everything here is trade accounts only; the period filter scopes it all.
-import { state, dashboard, insights, label, sublabel, shortTape, followUps, STATUS, todayISO, hasAllOrders } from '../store.js';
+import { FIRST_DAY, state, dashboard, insights, label, sublabel, shortTape, followUps, STATUS, todayISO, hasAllOrders } from '../store.js';
 import { html, raw, icon, money0, count, delta, columnChart, barList, statusChip, ago, dueLabel, loadingBlock, trendBadge } from '../ui.js';
 import { openGiveOffer } from './offers.js';
 import { toast, busy } from '../ui.js';
@@ -16,14 +16,15 @@ const nudge = { steps: null, loading: false, choice: new Map() };
 const iso = (t) => new Date(t).toLocaleDateString('en-CA');
 const DAY = 864e5;
 
-function loadProfit(el, days) {
+function loadProfit(el, days, allTime = false) {
   if (!SERVER_FEATURES) return;
-  const key = String(days);
+  const key = allTime ? 'all' : String(days);
   if (profit.key === key || profit.loading === key) return;
   profit.loading = key;
   const now = Date.now();
   const range = (endAgo) => `from=${iso(now - (endAgo + days - 1) * DAY)}&to=${iso(now - endAgo * DAY)}`;
-  Promise.all([serverApi(`/api/margins?${range(0)}&type=all`), serverApi(`/api/margins?${range(days)}&type=all`)])
+  // All time has nothing before it to compare with.
+  Promise.all([serverApi(`/api/margins?${range(0)}&type=all`), allTime ? null : serverApi(`/api/margins?${range(days)}&type=all`)])
     .then(([cur, prev]) => { if (profit.loading !== key) return; Object.assign(profit, { key, cur, prev, error: '' }); })
     .catch((err) => { if (profit.loading === key) Object.assign(profit, { key, error: err.message }); })
     .finally(() => { if (profit.loading === key) { profit.loading = ''; if (el.isConnected) render(el); } });
@@ -71,7 +72,9 @@ function nudgeAction(c, s) {
     <button type="button" class="btn btn--sm btn--ink" data-nudge-draft="${c.id}" ${pick ? '' : raw('disabled')} title="Draft this email into the Outbox for approval">${icon('mail', 'i--sm')}Draft</button>
   </div>`;
 }
-const PERIODS = [[30, '30 days'], [90, '90 days'], [365, '12 months']];
+// 0 is all time: everything since Trade Hub's records begin.
+const PERIODS = [[30, '30 days'], [90, '90 days'], [365, '12 months'], [730, '2 years'], [0, 'All time']];
+const daysFor = (n) => (n ? n : Math.ceil((Date.now() - Date.parse(FIRST_DAY)) / DAY) + 1);
 
 export function render(el) {
   const today = todayISO();
@@ -79,14 +82,15 @@ export function render(el) {
   const firstSync = !state.orders.length && state.ordersSyncing;
   // The 60-day limit means a 90-day or 12-month view would silently show
   // 60 days -- clamp and say so instead.
-  const maxDays = hasAllOrders() ? 365 : 30;
-  if (ui.days > maxDays) ui.days = maxDays;
-  const d = dashboard(ui);
+  const maxDays = hasAllOrders() ? Infinity : 30;
+  if (!hasAllOrders() && (ui.days > maxDays || ui.days === 0)) ui.days = maxDays;
+  const days = daysFor(ui.days);
+  const d = dashboard({ days });
   const attention = [...state.customers.values()].map((c) => ({ c, s: insights(c) }))
     .filter(({ s }) => ['due', 'risk'].includes(s.status)).sort((a, b) => b.c.amountSpent - a.c.amountSpent).slice(0, 6);
-  loadProfit(el, ui.days);
+  loadProfit(el, days, ui.days === 0);
   loadNudge(el);
-  const granularity = ui.days > 120 ? 'By month' : ui.days > 31 ? 'By week' : 'By day';
+  const granularity = days > 120 ? 'By month' : days > 31 ? 'By week' : 'By day';
 
   el.innerHTML = String(html`
     <div class="page">
@@ -112,7 +116,7 @@ export function render(el) {
       ${state.ordersError ? html`<div class="notice notice--err">${icon('circle-alert')}<div><strong>Couldn't sync orders.</strong> ${state.ordersError}</div></div>` : ''}
 
       <div class="filters">
-        <div class="seg" role="group" aria-label="Period">${PERIODS.map(([n, l]) => html`<button data-days="${n}" aria-pressed="${String(ui.days === n)}" ${n > maxDays ? raw('disabled title="Needs the read all orders permission"') : ''}>${l}</button>`)}</div>
+        <div class="seg" role="group" aria-label="Period">${PERIODS.map(([n, l]) => html`<button data-days="${n}" aria-pressed="${String(ui.days === n)}" ${(n === 0 ? !hasAllOrders() : n > maxDays) ? raw('disabled title="Needs the read all orders permission"') : ''}>${l}</button>`)}</div>
         ${state.ordersSyncing ? html`<span class="muted small row">${icon('refresh-cw', 'i--sm')}Syncing orders… ${state.ordersProgress || ''}</span>` : ''}
       </div>
 
@@ -153,8 +157,8 @@ export function render(el) {
         </section>
 
         <section class="card">
-          <div class="card__head"><h2 class="h2">Who's changing</h2><span class="muted small">Spend vs the previous ${PERIODS.find(([n]) => n === ui.days)[1]}</span></div>
-          ${!d.comparable ? html`<p class="muted small" style="margin:0">Needs order history from before this period to compare against.</p>` : html`
+          <div class="card__head"><h2 class="h2">Who's changing</h2><span class="muted small">${ui.days === 0 ? 'All time' : `Spend vs the previous ${PERIODS.find(([n]) => n === ui.days)[1]}`}</span></div>
+          ${ui.days === 0 ? html`<p class="muted small" style="margin:0">All time has nothing before it to compare with. Pick 12 months or 2 years to see who's ordering more or less.</p>` : !d.comparable ? html`<p class="muted small" style="margin:0">Needs order history from before this period to compare against.</p>` : html`
             <h3 class="h3">${icon('trending-up', 'i--sm')} Ordering more</h3>
             ${moverList(d.growing, 'up')}
             <h3 class="h3" style="margin-top:18px">${icon('trending-down', 'i--sm')} Ordering less</h3>

@@ -5,6 +5,7 @@
 // box or other cost when it differs from the defaults.
 import { html, raw, icon, money, count, fmtDate, toast, busy, openDrawer, loadingBlock, adminUrl } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
+import { FIRST_DAY } from '../store.js';
 
 const iso = (d) => d.toLocaleDateString('en-CA');
 const PRESETS = [
@@ -13,6 +14,9 @@ const PRESETS = [
   ['30', 'Last 30 days', () => { const n = new Date(); return [iso(new Date(n - 29 * 864e5)), iso(n)]; }],
   ['90', 'Last 90 days', () => { const n = new Date(); return [iso(new Date(n - 89 * 864e5)), iso(n)]; }],
   ['year', 'This year', () => { const n = new Date(); return [iso(new Date(n.getFullYear(), 0, 1)), iso(n)]; }],
+  ['365', 'Last 12 months', () => { const n = new Date(); return [iso(new Date(n - 364 * 864e5)), iso(n)]; }],
+  ['last-year', 'Last year', () => { const n = new Date(); return [iso(new Date(n.getFullYear() - 1, 0, 1)), iso(new Date(n.getFullYear() - 1, 11, 31))]; }],
+  ['all', 'All time', () => [FIRST_DAY, iso(new Date())]],
 ];
 const TYPES = [['all', 'All sales'], ['trade', 'Trade'], ['retail', 'Retail']];
 const TYPE_LABEL = { trade: 'Trade', retail: 'Retail', sample: 'Sample' };

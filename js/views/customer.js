@@ -13,6 +13,7 @@ import { samplesCardShell, mountSamplesCard } from './samples-card.js';
 import { ensureForm, saveBar, detailsFormCard, mountDetailsForm } from './customer-form.js';
 import { openGiveOffer, offerStatusChip } from './offers.js';
 import { groupCardShell, mountGroupCard } from './groups.js';
+import { profitStats, loadAccountProfit, accountProfitReady } from '../account-profit.js';
 
 const pretty = (s) => (s ? s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ') : '—');
 const expanded = new Set();
@@ -70,6 +71,7 @@ export function render(el, numericId) {
         <div class="stat"><span class="stat__label">Average order</span><span class="stat__value">${money0(s.aov)}</span><span class="stat__sub">Across all orders</span></div>
         <div class="stat"><span class="stat__label">Last order</span><span class="stat__value">${s.daysSince === null ? '—' : s.daysSince === 0 ? 'Today' : `${s.daysSince} day${s.daysSince === 1 ? '' : 's'}`}</span><span class="stat__sub">${s.lastAt ? `ago · ${fmtDate(s.lastAt)}` : 'Never ordered'}</span></div>
         <div class="stat"><span class="stat__label">Last 90 days</span><span class="stat__value">${s.trend ? money0(s.trend.cur) : '—'}</span><span class="stat__sub">${s.trend ? html`${trendBadge(s.trend)}<span>vs ${money0(s.trend.prev)} the 90 before</span>` : 'Shown once they order regularly'}</span></div>
+        <div data-acct-profit style="display:contents">${profitStats(c.id)}</div>
       </div>
 
       <div class="grid grid--side">
@@ -163,6 +165,7 @@ export function render(el, numericId) {
     columnChart(el.querySelector('[data-chart]'), revenueSeries(s.orders, 365), { unit: 'Spend', height: 200 });
   }
   mountSamplesCard(el.querySelector('[data-samples-card]'), c);
+  if (!accountProfitReady()) loadAccountProfit().then(() => { const box = el.querySelector('[data-acct-profit]'); if (box) box.innerHTML = String(profitStats(c.id)); });
   mountGroupCard(el.querySelector('[data-group-card]'), c);
   mountDetailsForm(el, c, () => render(el, numericId));
   mountEmailCard(el.querySelector('[data-email-card]'), c);
