@@ -67,14 +67,17 @@ function openSampleForm(c, done) {
       ${f('address2', 'Address line 2 (optional)', a.address2 || '')}
       <div class="form-row">${f('city', 'Town', a.city || c.city)}${f('zip', 'Postcode', a.zip || '', 'autocomplete="postal-code"')}</div>
       ${f('phone', 'Phone (optional, for the courier)', c.phone)}
+      <label class="check" data-overcap hidden><input type="checkbox" data-overcap-ok><span>Send it anyway, over this month's sample cap</span></label>
     </div>`,
     foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-go>${icon('package', 'i--sm')}Create sample order</button>`,
     onMount: (d) => {
       d.$('[data-go]').addEventListener('click', (e) => {
         const address = Object.fromEntries(d.$$('[data-a]').map((i) => [i.dataset.a, i.value.trim()]));
-        busy(e.currentTarget, () => serverApi('/api/samples/order', { method: 'POST', body: { customerId: c.id, address } }))
+        const overCap = d.$('[data-overcap-ok]').checked;
+        busy(e.currentTarget, () => serverApi('/api/samples/order', { method: 'POST', body: { customerId: c.id, address, overCap } }))
           .then((r) => { toast(`Sample order ${r.order.name} created`); d.close(); return changed(c).then(done); })
-          .catch(() => {});
+          // Over the monthly cap: offer to approve it, then try again.
+          .catch((err) => { if (err && err.code === 'over_cap') d.$('[data-overcap]').hidden = false; });
       });
     },
   });

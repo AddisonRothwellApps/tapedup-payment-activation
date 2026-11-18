@@ -4,7 +4,7 @@
 // straight away, within the server's daily limits.
 import { state, label } from '../store.js';
 import { prospectState, loadProspects } from '../prospects.js';
-import { html, icon, ago, fmtDate, toast, openDrawer, busy, loadingBlock, showEmail, emailExcerpt } from '../ui.js';
+import { html, raw, icon, ago, fmtDate, toast, openDrawer, busy, loadingBlock, showEmail, emailExcerpt } from '../ui.js';
 import { serverApi, SERVER_FEATURES } from '../server.js';
 import { richTextShell, mountRichText } from '../rich-text.js';
 import { TRADE_SERVER } from '../env.js';
@@ -149,13 +149,17 @@ function openRetry(el, item) {
       <p class="muted small" style="margin:0">The agent reads their email again and rewrites the reply, using the knowledge base as it is now. It picks up anything it missed (like an address), but never does anything twice: no second sample order or starter offer. The new draft replaces this one and waits here for approval.</p>
       <label class="field"><span>Anything it should do differently? (optional)</span><textarea class="textarea" data-note rows="4" placeholder="e.g. Shorter, and mention the free display stand"></textarea>
         <span class="muted small">Leave it blank if you've just fixed the knowledge base.</span></label>
+      ${/Sample NOT sent/.test(item.agent_note || '') ? html`<div class="notice notice--warn">${icon('package')}<div>
+        <strong>The sample wasn't sent:</strong> ${(String(item.agent_note).match(/Sample NOT sent: ([^·]+)/) || [])[1] || ''}
+        <label class="check" style="margin-top:8px"><input type="checkbox" data-approve ${/over the £/.test(item.agent_note) ? raw('checked') : ''}><span>Send the sample anyway (I'm approving it${/over the £/.test(item.agent_note) ? ' over the monthly cap' : ''})</span></label>
+        <span class="small muted">Without this, the new reply can't say a sample is on its way.</span></div></div>` : ''}
     </div>`,
     foot: html`<button class="btn btn--ghost" data-close>Cancel</button><button class="btn" data-go>${icon('sparkles', 'i--sm')}Write it again</button>`,
     onMount: (d) => {
       d.$('[data-note]').focus();
       d.$('[data-go]').addEventListener('click', (e) => {
         e.currentTarget.textContent = 'Writing…';
-        busy(e.currentTarget, () => serverApi('/api/agent/redraft', { method: 'POST', body: { outboxId: item.id, note: d.$('[data-note]').value.trim() } }))
+        busy(e.currentTarget, () => serverApi('/api/agent/redraft', { method: 'POST', body: { outboxId: item.id, note: d.$('[data-note]').value.trim(), approveSample: !!(d.$('[data-approve]') && d.$('[data-approve]').checked) } }))
           .then(() => { toast('New draft ready'); d.close(); ui.tab = 'pending_approval'; ui.items = null; render(el); window.dispatchEvent(new Event('outbox-changed')); })
           .catch(() => { const b = d.$('[data-go]'); if (b) b.innerHTML = String(html`${icon('sparkles', 'i--sm')}Write it again`); });
       });
