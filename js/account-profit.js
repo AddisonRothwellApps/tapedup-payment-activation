@@ -37,22 +37,20 @@ export function profitCell(id) {
   const p = accountProfit(id);
   if (!p || !p.lifetime.costed) return html`<span class="faint" title="${p && p.lifetime.orders ? 'Their orders have no product costs yet (imported invoices)' : 'No orders yet'}">—</span>`;
   const l = p.lifetime;
-  return html`<span class="strong">${money0(l.profit)}</span>${l.margin != null ? html`<br><span class="small ${tone(l.margin)}">${pct(l.margin)}</span>` : ''}`;
+  const part = l.costed < l.orders ? html` <span class="faint" title="Only ${l.costed} of their ${l.orders} orders have product costs; imported invoices are left out">· ${l.costed}/${l.orders}</span>` : '';
+  return html`<span class="strong">${money0(l.profit)}</span>${l.margin != null ? html`<br><span class="small ${tone(l.margin)}">${pct(l.margin)}</span>` : ''}${part}`;
 }
 
-/** The stat tiles on a customer's page (two tiles: account profit, last 12 months). */
+/** The stat tile on a customer's page: account profit, all time and the last 12 months. */
 export function profitStats(id) {
   if (!SERVER_FEATURES) return '';
   const p = accountProfit(id);
   const waiting = !data ? (failed ? 'Couldn\'t load' : 'Working it out…') : null;
   const l = p?.lifetime;
   const y = p?.year;
-  const incomplete = (t) => (t && t.incomplete ? ` · ${t.incomplete} order${t.incomplete === 1 ? '' : 's'} without costs left out` : '');
+  const left = l && l.costed < l.orders ? ` · ${l.orders - l.costed} of ${l.orders} orders have no costs (imported invoices) and are left out` : '';
   return html`
     <div class="stat"><span class="stat__label">Account profit</span>
       <span class="stat__value">${l && l.costed ? money0(l.profit) : '—'}</span>
-      <span class="stat__sub">${waiting || (l && l.costed ? html`<span class="strong ${tone(l.margin)}">${pct(l.margin)}</span> margin, all time${incomplete(l)}${p.samples ? ` · samples cost ${money0(p.samples)}` : ''}` : l && l.orders ? 'Their orders have no product costs yet' : 'No orders yet')}</span></div>
-    <div class="stat"><span class="stat__label">Profit, last 12 months</span>
-      <span class="stat__value">${y && y.costed ? money0(y.profit) : '—'}</span>
-      <span class="stat__sub">${waiting || (y && y.costed ? html`<span class="strong ${tone(y.margin)}">${pct(y.margin)}</span> margin on ${money0(y.net + y.shipping)} taken${incomplete(y)}` : 'No costed orders in the last year')}</span></div>`;
+      <span class="stat__sub">${waiting || (l && l.costed ? html`<span class="strong ${tone(l.margin)}">${pct(l.margin)}</span> margin, all time · ${y && y.costed ? html`<span class="strong">${money0(y.profit)}</span> (${pct(y.margin)}) in the last 12 months` : 'none in the last 12 months'}${left}${p.samples ? ` · samples cost ${money0(p.samples)}` : ''}` : l && l.orders ? 'Their orders have no product costs yet (imported invoices)' : 'No orders yet')}</span></div>`;
 }
