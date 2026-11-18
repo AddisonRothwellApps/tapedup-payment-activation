@@ -551,10 +551,15 @@ function indexOrders() {
   state.ordersByCustomer = map;
 }
 
+/** The first day any TapedUp trade records go back to. */
+export const FIRST_DAY = '2024-01-01';
+
 /** Without read_all_orders Shopify only returns the last 60 days. */
 export function orderWindowStart() {
   const d = new Date();
-  if (hasAllOrders()) d.setMonth(d.getMonth() - 24); else d.setDate(d.getDate() - 60);
+  // With every order readable, keep the whole trade history (Trade Hub's records start in 2024).
+  if (hasAllOrders()) return FIRST_DAY;
+  d.setDate(d.getDate() - 60);
   return d.toISOString().slice(0, 10);
 }
 
@@ -730,7 +735,7 @@ export function revenueSeries(orders, days, now = Date.now()) {
     const months = Math.round(days / 30.4);
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-      buckets.push({ start: d.getTime(), end: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(), label: d.toLocaleDateString('en-GB', { month: 'short' }), long: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), value: 0, count: 0 });
+      buckets.push({ start: d.getTime(), end: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(), label: months > 12 ? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : d.toLocaleDateString('en-GB', { month: 'short' }), long: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), value: 0, count: 0 });
     }
   } else {
     const step = days > 31 ? 7 : 1;

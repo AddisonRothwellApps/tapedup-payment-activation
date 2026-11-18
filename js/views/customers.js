@@ -2,6 +2,7 @@
 // bulk "give a starter offer", CSV export, and adding a new trade account.
 import { state, insights, isTerms, label, sublabel, shortTape, offerStatus, followUps, lastContact, STATUS, todayISO, createCustomer, stageOf } from '../store.js';
 import { html, raw, icon, money0, ago, trendBadge, statusChip, toast, openDrawer, busy } from '../ui.js';
+import { profitCell, accountProfit, loadAccountProfit, accountProfitReady } from '../account-profit.js';
 import { openGiveOffer } from './offers.js';
 
 const FILTERS = [
@@ -13,6 +14,8 @@ const FILTERS = [
 ];
 const SORTS = [
   ['spend', 'Lifetime spend'],
+  ['profit', 'Most profit'],
+  ['margin', 'Best margin'],
   ['recent', 'Most recent order'],
   ['trend', 'Ordering more'],
   ['slowing', 'Ordering less'],
@@ -20,6 +23,8 @@ const SORTS = [
   ['contact', 'Longest since contact'],
   ['name', 'Name'],
 ];
+// Lifetime profit or margin for sorting; accounts with no costed orders go last.
+const profitOf = (c, k) => { const l = accountProfit(c.id)?.lifetime; return l && l.costed && l[k] != null ? l[k] : -Infinity; };
 const ui = { q: '', filter: 'all', sort: 'spend', limit: 50, selected: new Set() };
 
 function rows() {
@@ -36,6 +41,8 @@ function rows() {
   const trendVal = ({ s }) => (s.trend && s.trend.pct !== null ? s.trend.pct : s.trend && s.trend.dir === 'new' ? 10 : -Infinity);
   const sorters = {
     spend: (a, b) => b.c.amountSpent - a.c.amountSpent,
+    profit: (a, b) => profitOf(b.c, 'profit') - profitOf(a.c, 'profit'),
+    margin: (a, b) => profitOf(b.c, 'margin') - profitOf(a.c, 'margin'),
     recent: (a, b) => String(b.s.lastAt || '').localeCompare(String(a.s.lastAt || '')),
     trend: (a, b) => trendVal(b) - trendVal(a),
     slowing: (a, b) => ((a.s.trend ? a.s.trend.cur - a.s.trend.prev : 0) - (b.s.trend ? b.s.trend.cur - b.s.trend.prev : 0)),
@@ -80,6 +87,7 @@ export function render(el) {
   el.querySelector('[data-new]').addEventListener('click', openNewCustomer);
   el.querySelector('[data-export]').addEventListener('click', () => exportCsv(ui.selected.size ? rows().filter(({ c }) => ui.selected.has(c.id)) : rows()));
   renderResults(el);
+  if (!accountProfitReady()) loadAccountProfit().then(() => { if (el.isConnected) renderResults(el); });
 }
 
 function renderResults(el) {
@@ -92,7 +100,7 @@ function renderResults(el) {
       ${list.length ? html`<div class="table-wrap"><table class="table">
         <thead><tr>
           <th class="w-check"><input type="checkbox" data-select-all aria-label="Select all shown" ${allShownSelected ? raw('checked') : ''}></th>
-          <th>Customer</th><th>Status</th><th class="r">Lifetime spend</th><th class="r hide-sm">Orders</th><th class="hide-sm">Last order</th><th class="hide-sm">Last contact</th><th title="Spend, last 90 days vs the 90 before">90-day trend</th><th class="hide-sm">Best tape</th>
+          <th>Customer</th><th>Status</th><th class="r">Lifetime spend</th><th class="r" title="Profit on all their orders after product cost, discounts, fees, postage and box, with the margin">Profit</th><th class="r hide-sm">Orders</th><th class="hide-sm">Last order</th><th class="hide-sm">Last contact</th><th title="Spend, last 90 days vs the 90 before">90-day trend</th><th class="hide-sm">Best tape</th>
         </tr></thead>
         <tbody>${shown.map(({ c, s }) => html`<tr data-href="#/customers/${c.numericId}">
           <td class="w-check"><input type="checkbox" data-select="${c.id}" aria-label="Select ${label(c)}" ${ui.selected.has(c.id) ? raw('checked') : ''}></td>
@@ -103,6 +111,7 @@ function renderResults(el) {
           </div></td>
           <td>${statusChip(s.status, STATUS)}</td>
           <td class="r">${money0(c.amountSpent)}</td>
+          <td class="r nowrap">${profitCell(c.id)}</td>
           <td class="r hide-sm">${c.numberOfOrders}</td>
           <td class="hide-sm nowrap">${s.lastAt ? ago(s.lastAt) : '—'}</td>
           <td class="hide-sm nowrap">${lastContact(c) ? ago(lastContact(c)) : '—'}</td>
@@ -139,11 +148,11 @@ function renderResults(el) {
 }
 
 function exportCsv(list) {
-  const cols = ['Company', 'Contact', 'Shopify name', 'Email', 'Phone', 'City', 'Status', 'Lifetime spend', 'Orders', 'Last order', 'Last contact', 'Spend last 90 days', 'Spend previous 90 days', 'Best tape', 'Stage', 'Tags'];
+  const cols = ['Company', 'Contact', 'Shopify name', 'Email', 'Phone', 'City', 'Status', 'Lifetime spend', 'Profit', 'Margin', 'Orders', 'Last order', 'Last contact', 'Spend last 90 days', 'Spend previous 90 days', 'Best tape', 'Stage', 'Tags'];
   const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [cols.map(cell).join(',')];
   for (const { c, s } of list) {
-    lines.push([label(c), c.contact, c.name, c.email, c.phone, c.city, STATUS[s.status].label, c.amountSpent.toFixed(2), c.numberOfOrders,
+    lines.push([label(c), c.contact, c.name, c.email, c.phone, c.city, STATUS[s.status].label, c.amountSpent.toFixed(2), profitOf(c, 'profit') > -Infinity ? profitOf(c, 'profit').toFixed(2) : '', profitOf(c, 'margin') > -Infinity ? `${Math.round(profitOf(c, 'margin') * 100)}%` : '', c.numberOfOrders,
       s.lastAt ? s.lastAt.slice(0, 10) : '', lastContact(c) || '', s.trend ? s.trend.cur.toFixed(2) : '', s.trend ? s.trend.prev.toFixed(2) : '', s.topProduct, stageOf(c).stage, c.tags.join(' ')].map(cell).join(','));
   }
   const url = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' }));
