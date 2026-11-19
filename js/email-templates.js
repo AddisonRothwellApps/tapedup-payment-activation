@@ -226,6 +226,27 @@ And if something put you off, I'd genuinely like to know. No hard feelings eithe
 
 Cheers,`,
     },
+    {
+      // Sent from the Promotions screen to every eligible trade account, not
+      // suggested by the pipeline (the reorder template stays the Active
+      // dealer suggestion because it comes first).
+      key: 'trade-bf26', name: 'Black Friday 2026: trade offer', stage: 'Active dealer', firstTouch: false, optOut: false, delayDays: 0, approval: 'always', tone: 'brand', offerTemplateId: '', active: true, promotionId: 'bf26-trade',
+      subject: 'Black Friday trade deal for {gym_name}',
+      preview: '10% off orders over £150 and 4 free rolls with every 24, until Cyber Monday.',
+      body: `Hi {first_name|there},
+
+Black Friday is on at TapedUp, and trade accounts get their own deal on top of your usual trade prices. It runs until Cyber Monday, 30 November:
+
+**10% off any order over £150.** It comes off at checkout when you're signed in. No code needed.
+
+**4 free rolls with every 24 you order.** Choose from Doodle, Pro, Black or White in any width, and put which ones you'd like in the order note. If you don't say, we'll pack a mix.
+
+Heads up: we're running 20% off for climbers on our website this week (30% off when they buy 3) and advertising it to boulderers. Your trade price is still well under that, so you can match it on your counter and keep a decent margin. A good week to have the tape stand full.
+
+Order at tapedup.co.uk, signed in with this email address, or just reply with what you need and I'll set it up.
+
+Cheers,`,
+    },
   ],
 };
 

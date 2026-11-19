@@ -76,6 +76,18 @@ client secret anywhere in this repo.
   visits, samples, notes, with follow-up dates).
 - **Trade orders** `#/orders` — every synced trade order, filterable, linking
   to Shopify.
+- **Promotions** `#/promotions` — time-boxed deals for every trade account
+  at once (Black Friday 2026 is the first), saved as the app-data metafield
+  `tapedup_admin.promotions` (`js/promotions.js`). Each shows its perks and
+  what they cost, who it's for (ordering now / gone quiet / account opened,
+  never Lost, opted out or address-less), the announcement email (a normal
+  template, e.g. `trade-bf26`) with "Draft N emails into the Outbox" for
+  everyone ticked (each waits for approval), and the orders that earned free
+  rolls with Mark packed. A spend-threshold perk is a Shopify automatic order
+  discount limited to the "Trade accounts (b2b)" segment and set to combine
+  with product discounts so it stacks on B2B trade pricing; free rolls are
+  packed by hand, because trade pricing doesn't combine with other product
+  discounts and a buy-X-get-Y discount would knock it off.
 - **Starter offers** `#/offers` — reusable templates (one is the default) and
   everyone who has an offer.
 - **Follow-ups** `#/follow-ups` — open follow-ups (overdue / today / coming

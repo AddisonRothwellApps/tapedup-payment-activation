@@ -20,6 +20,7 @@ import * as orders from './views/orders.js';
 import * as products from './views/products.js';
 import * as margins from './views/margins.js';
 import * as offers from './views/offers.js';
+import * as promotions from './views/promotions.js';
 import * as followups from './views/followups.js';
 import * as setup from './views/setup.js';
 import * as importer from './views/import.js';
@@ -43,6 +44,9 @@ const NAV = [
   ] },
   { group: 'products', label: 'Products', icon: 'package', items: [
     { key: 'products', href: '#/products', label: 'Products and stock', icon: 'boxes' },
+  ] },
+  { group: 'offers', label: 'Offers', icon: 'tag', items: [
+    { key: 'promotions', href: '#/promotions', label: 'Promotions', icon: 'megaphone' },
     { key: 'offers', href: '#/offers', label: 'Starter offers', icon: 'gift' },
   ] },
   { group: 'reporting', label: 'Reporting', icon: 'chart-column', items: [
@@ -71,6 +75,7 @@ const ROUTES = [
   { nav: 'products', re: /^\/products$/, view: products },
   { nav: 'margins', re: /^\/margins$/, view: margins },
   { nav: 'offers', re: /^\/offers$/, view: offers },
+  { nav: 'promotions', re: /^\/promotions$/, view: promotions },
   { nav: 'follow-ups', re: /^\/follow-ups$/, view: followups },
   { nav: 'setup', re: /^\/setup$/, view: setup },
   { nav: 'setup', re: /^\/import$/, view: importer },
