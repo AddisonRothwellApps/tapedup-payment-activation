@@ -6,16 +6,19 @@
 // (tapedup_admin.promotions) so both copies of Trade Hub share it. Each one
 // carries up to two perks:
 //   - threshold:  "10% off orders over £150". A real Shopify automatic order
-//                 discount, limited to the "Trade accounts (b2b)" segment and
-//                 set to combine with product discounts so it stacks on B2B
-//                 trade pricing. Its id is kept here so its status can be shown.
+//                 discount, limited to a customer segment of everyone tagged
+//                 with the promotion's activation tag (promo-bf26 for Black
+//                 Friday 2026) and set to combine with product discounts so it
+//                 stacks on B2B trade pricing. Nobody gets it until they're
+//                 activated here, which adds the tag. Its id is kept so its
+//                 status can be shown.
 //   - free-rolls: "4 free rolls with every 24". Not a checkout discount: B2B
 //                 trade pricing doesn't combine with other product discounts,
 //                 so a buy-X-get-Y discount would knock trade pricing off the
 //                 whole order. Instead qualifying orders are listed here and
 //                 the free rolls are packed in by hand.
-// Plus who it's for (audience), the email template that announces it, and
-// which qualifying orders have had their free rolls packed.
+// Plus the tag that activates it for an account, the email template that
+// announces it, and which qualifying orders have had their free rolls packed.
 import { gql, assertOk } from './api.js';
 import { state, isDealer, insights, stageOf, countable, numericId } from './store.js';
 
@@ -46,7 +49,10 @@ export const BF26 = {
     { kind: 'threshold', minSpend: 150, percent: 10, discountId: 'gid://shopify/DiscountAutomaticNode/1936838033732' },
     { kind: 'free-rolls', everyRolls: 24, freeRolls: 4, designs: FREE_ROLL_DESIGNS },
   ],
-  audience: { active: true, quiet: true, new: true },
+  // Activating an account adds this tag; the Shopify discount is limited to
+  // the "Promo: Black Friday 2026 trade (activated)" segment (customer_tags
+  // CONTAINS 'promo-bf26'), so the offer is off for everyone until then.
+  activationTag: 'promo-bf26',
   templateKey: 'trade-bf26',
   packed: {},
   emailed: [],
@@ -61,6 +67,8 @@ export async function loadPromotions() {
   try { list = raw ? JSON.parse(raw) : null; } catch (err) { list = null; }
   // First open: start with the Black Friday 2026 trade promotion already set up.
   promoState.list = Array.isArray(list) ? list : [structuredClone(BF26)];
+  // Saved before promotions had activation tags: Black Friday 2026 uses promo-bf26.
+  promoState.list.forEach((p) => { if (p.id === BF26.id && !p.activationTag) p.activationTag = BF26.activationTag; });
   promoState.saved = Array.isArray(list);
   promoState.loaded = true;
   return promoState.list;
@@ -110,27 +118,28 @@ export function audienceOf(c, now = Date.now()) {
   return 'active'; // new (first order recently), active, due
 }
 
+export const isActivated = (c, p) => !!p.activationTag && c.tags.includes(p.activationTag);
+
 /**
- * Every trade account, sorted into audiences, with the reason any of them
- * can't be emailed. Opted-out and Lost accounts are never emailed; nobody
- * without an email address can be.
+ * Every trade account the promotion could be offered to, with its audience,
+ * whether it's been activated, whether the email has been drafted, and why
+ * it can't be emailed (opted out, Lost, no address). Lost accounts aren't
+ * offered it at all.
  */
 export function eligibility(p, now = Date.now()) {
-  const groups = Object.fromEntries(AUDIENCES.map((a) => [a.key, []]));
-  const blocked = [];
+  const rows = [];
   for (const c of state.customers.values()) {
     const a = audienceOf(c, now);
     if (!a) continue;
-    const reason = !c.email ? 'No email address'
-      : c.crm.optOut ? 'Opted out of email'
-      : stageOf(c, now).stage === 'Lost' ? 'Marked Lost'
-      : '';
-    const row = { c, audience: a, emailed: (p.emailed || []).includes(c.id) };
-    if (reason) blocked.push({ ...row, reason });
-    else groups[a].push(row);
+    const lost = stageOf(c, now).stage === 'Lost';
+    if (lost && !isActivated(c, p)) continue;
+    const noEmail = !c.email ? 'No email address' : c.crm.optOut ? 'Opted out of email' : lost ? 'Marked Lost' : '';
+    rows.push({ c, audience: a, active: isActivated(c, p), emailed: (p.emailed || []).includes(c.id), noEmail });
   }
-  const chosen = AUDIENCES.filter((a) => p.audience && p.audience[a.key]).flatMap((a) => groups[a.key]);
-  return { groups, blocked, chosen };
+  const order = { active: 0, quiet: 1, new: 2 };
+  rows.sort((x, y) => (order[x.audience] - order[y.audience]) || String(x.c.lastOrderAt || '').localeCompare(String(y.c.lastOrderAt || '')) * -1);
+  const groups = Object.fromEntries(AUDIENCES.map((au) => [au.key, rows.filter((r) => r.audience === au.key)]));
+  return { rows, groups, activated: rows.filter((r) => r.active) };
 }
 
 // Tape rolls in an order: every tape line (stickers, magnets and the like don't count).
@@ -150,17 +159,17 @@ export function qualifyingOrders(p) {
     .filter((o) => countable(o) && !o.imp && o.cust)
     .filter((o) => { const t = Date.parse(o.at); return t >= from && t <= to; })
     .map((o) => ({ o, c: state.byNumericId.get(o.cust), rolls: rollsIn(o) }))
-    .filter((r) => r.c && isDealer(r.c) && r.rolls >= f.everyRolls)
+    .filter((r) => r.c && isDealer(r.c) && isActivated(r.c, p) && r.rolls >= f.everyRolls)
     .map((r) => ({ ...r, free: Math.floor(r.rolls / f.everyRolls) * f.freeRolls, packed: !!(p.packed || {})[r.o.id] }));
 }
 
-/** Trade orders in the window over the spend threshold (the 10% applies to these at checkout). */
+/** Activated accounts' orders in the window over the spend threshold (the 10% applies to these at checkout). */
 export function thresholdOrders(p) {
   const t = perk(p, 'threshold');
   if (!t) return [];
   const from = Date.parse(`${p.startsOn}T00:00:00`);
   const to = Date.parse(`${p.endsOn}T23:59:59`);
-  return state.orders.filter((o) => countable(o) && !o.imp && o.cust && state.byNumericId.get(o.cust) && isDealer(state.byNumericId.get(o.cust))
+  return state.orders.filter((o) => countable(o) && !o.imp && o.cust && state.byNumericId.get(o.cust) && isActivated(state.byNumericId.get(o.cust), p)
     && Date.parse(o.at) >= from && Date.parse(o.at) <= to && o.total >= t.minSpend * (1 - t.percent / 100));
 }
 
